@@ -46,6 +46,13 @@ nav:
     - Units: 08-units.md
     - Buildings: 09-buildings.md
     - Tech Tree: 10-tech-tree.md
+  - Research:
+    - Overview: research/README.md
+    - Engine Comparison: research/engine-comparison.md
+    - Networking Architecture: research/networking-architecture.md
+    - Map Generation: research/map-generation.md
+    - Asset Strategy: research/asset-strategy.md
+    - System Dependencies: research/system-dependencies.md
 
 markdown_extensions:
   - tables
