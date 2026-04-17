@@ -1,0 +1,66 @@
+site_name: "20,000 BC - Game Design"
+site_description: "A prehistoric real-time strategy game set in the 20,000 BC era"
+site_url: "https://manawenuz.github.io/20KBC/"
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: brown
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: brown
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.integrate
+    - search.suggest
+    - content.tabs.link
+  custom_dir: overrides
+  icon:
+    repo: fontawesome/brands/github
+
+repo_url: https://github.com/manawenuz/20KBC
+repo_name: manawenuz/20KBC
+
+nav:
+  - Home: index.md
+  - Game Design:
+    - Overview: 01-game-overview.md
+    - Core Mechanics: 02-core-mechanics.md
+    - Actions: 03-actions.md
+  - World:
+    - Environment: 04-environment.md
+    - Season & Climate Tables: 05-environment-season-climate-tables.md
+    - GAIA System: 06-gaia.md
+    - Resources: 07-resources.md
+  - Units & Structures:
+    - Units: 08-units.md
+    - Buildings: 09-buildings.md
+    - Tech Tree: 10-tech-tree.md
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+extra_css:
+  - stylesheets/extra.css
+
+docs_dir: docs

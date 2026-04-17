@@ -1,6 +1,6 @@
 # Resources
 
-[Back to Index](./README.md) | [Prev: GAIA System](./06-gaia.md) | [Next: Units](./08-units.md)
+[Back to Index](./index.md) | [Prev: GAIA System](./06-gaia.md) | [Next: Units](./08-units.md)
 
 ---
 
@@ -106,4 +106,4 @@
 
 ---
 
-[Back to Index](./README.md) | [Prev: GAIA System](./06-gaia.md) | [Next: Units](./08-units.md)
+[Back to Index](./index.md) | [Prev: GAIA System](./06-gaia.md) | [Next: Units](./08-units.md)

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div id="password-gate">
+  <div class="gate-box">
+    <h2>20,000 BC</h2>
+    <p>This documentation is private. Enter the password to continue.</p>
+    <input type="password" id="gate-password" placeholder="Password" autofocus />
+    <button onclick="checkPassword()">Enter</button>
+    <div class="error" id="gate-error"></div>
+  </div>
+</div>
+
+{{ super() }}
+
+<script>
+(function() {
+  // To change the password, run: echo -n "yourpassword" | shasum -a 256
+  // Then replace EXPECTED_HASH below with the output.
+  // Current password: 20kbc2026
+
+  async function sha256(message) {
+    var msgBuffer = new TextEncoder().encode(message);
+    var hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    var hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  var EXPECTED_HASH = "235773a3b1d2087c7296c69e9847482e728ae4215beff65511d90339f077f64e";
+
+  var sessionKey = "20kbc_auth";
+
+  function isAuthenticated() {
+    return sessionStorage.getItem(sessionKey) === "true";
+  }
+
+  function showSite() {
+    document.getElementById("password-gate").classList.add("hidden");
+    document.body.classList.remove("gated");
+  }
+
+  function init() {
+    if (isAuthenticated()) {
+      showSite();
+    } else {
+      document.body.classList.add("gated");
+    }
+  }
+
+  window.checkPassword = async function() {
+    var input = document.getElementById("gate-password").value;
+    var hash = await sha256(input);
+
+    if (hash === EXPECTED_HASH) {
+      sessionStorage.setItem(sessionKey, "true");
+      showSite();
+    } else {
+      document.getElementById("gate-error").textContent = "Incorrect password. Try again.";
+      document.getElementById("gate-password").value = "";
+      document.getElementById("gate-password").focus();
+    }
+  };
+
+  // Allow Enter key
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && !document.getElementById("password-gate").classList.contains("hidden")) {
+      window.checkPassword();
+    }
+  });
+
+  // Run on page load
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
+{% endblock %}

@@ -1,6 +1,6 @@
 # GAIA System
 
-[Back to Index](./README.md) | [Prev: Season/Climate Tables](./05-environment-season-climate-tables.md) | [Next: Resources](./07-resources.md)
+[Back to Index](./index.md) | [Prev: Season/Climate Tables](./05-environment-season-climate-tables.md) | [Next: Resources](./07-resources.md)
 
 ---
 
@@ -304,4 +304,4 @@ Wind types (randomly selected when triggered):
 
 ---
 
-[Back to Index](./README.md) | [Prev: Season/Climate Tables](./05-environment-season-climate-tables.md) | [Next: Resources](./07-resources.md)
+[Back to Index](./index.md) | [Prev: Season/Climate Tables](./05-environment-season-climate-tables.md) | [Next: Resources](./07-resources.md)

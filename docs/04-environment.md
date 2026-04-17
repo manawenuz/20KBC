@@ -1,6 +1,6 @@
 # Environment
 
-[Back to Index](./README.md) | [Prev: Actions](./03-actions.md) | [Next: Season/Climate Tables](./05-environment-season-climate-tables.md)
+[Back to Index](./index.md) | [Prev: Actions](./03-actions.md) | [Next: Season/Climate Tables](./05-environment-season-climate-tables.md)
 
 ---
 
@@ -94,4 +94,4 @@ Same as height impact on range (see [Buildings - Walls/Towers](./09-buildings.md
 
 ---
 
-[Back to Index](./README.md) | [Prev: Actions](./03-actions.md) | [Next: Season/Climate Tables](./05-environment-season-climate-tables.md)
+[Back to Index](./index.md) | [Prev: Actions](./03-actions.md) | [Next: Season/Climate Tables](./05-environment-season-climate-tables.md)

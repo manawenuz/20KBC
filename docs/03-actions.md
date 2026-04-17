@@ -1,6 +1,6 @@
 # Actions
 
-[Back to Index](./README.md) | [Prev: Core Mechanics](./02-core-mechanics.md) | [Next: Environment](./04-environment.md)
+[Back to Index](./index.md) | [Prev: Core Mechanics](./02-core-mechanics.md) | [Next: Environment](./04-environment.md)
 
 ---
 
@@ -117,4 +117,4 @@ Command to construct a building.
 
 ---
 
-[Back to Index](./README.md) | [Prev: Core Mechanics](./02-core-mechanics.md) | [Next: Environment](./04-environment.md)
+[Back to Index](./index.md) | [Prev: Core Mechanics](./02-core-mechanics.md) | [Next: Environment](./04-environment.md)

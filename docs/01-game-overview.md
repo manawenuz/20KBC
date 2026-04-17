@@ -1,6 +1,6 @@
 # Game Overview
 
-[Back to Index](./README.md) | [Next: Core Mechanics](./02-core-mechanics.md)
+[Back to Index](./index.md) | [Next: Core Mechanics](./02-core-mechanics.md)
 
 ---
 
@@ -56,4 +56,4 @@ Single-player mode designed to teach game mechanics to new players. Similar to c
 
 ---
 
-[Back to Index](./README.md) | [Next: Core Mechanics](./02-core-mechanics.md)
+[Back to Index](./index.md) | [Next: Core Mechanics](./02-core-mechanics.md)

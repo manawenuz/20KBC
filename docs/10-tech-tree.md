@@ -1,6 +1,6 @@
 # Tech Tree
 
-[Back to Index](./README.md) | [Prev: Buildings](./09-buildings.md)
+[Back to Index](./index.md) | [Prev: Buildings](./09-buildings.md)
 
 ---
 
@@ -98,4 +98,4 @@ All upgrades are researched at the **Home Base** (Global) or on **individual uni
 
 ---
 
-[Back to Index](./README.md) | [Prev: Buildings](./09-buildings.md)
+[Back to Index](./index.md) | [Prev: Buildings](./09-buildings.md)

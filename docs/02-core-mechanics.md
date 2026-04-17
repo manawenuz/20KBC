@@ -1,6 +1,6 @@
 # Core Mechanics
 
-[Back to Index](./README.md) | [Prev: Game Overview](./01-game-overview.md) | [Next: Actions](./03-actions.md)
+[Back to Index](./index.md) | [Prev: Game Overview](./01-game-overview.md) | [Next: Actions](./03-actions.md)
 
 ---
 
@@ -120,4 +120,4 @@ Organic substances break down into simpler matter over time.
 
 ---
 
-[Back to Index](./README.md) | [Prev: Game Overview](./01-game-overview.md) | [Next: Actions](./03-actions.md)
+[Back to Index](./index.md) | [Prev: Game Overview](./01-game-overview.md) | [Next: Actions](./03-actions.md)

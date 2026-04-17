@@ -1,6 +1,6 @@
 # Buildings
 
-[Back to Index](./README.md) | [Prev: Units](./08-units.md) | [Next: Tech Tree](./10-tech-tree.md)
+[Back to Index](./index.md) | [Prev: Units](./08-units.md) | [Next: Tech Tree](./10-tech-tree.md)
 
 ---
 
@@ -303,4 +303,4 @@ A mobile platform on water for fishing and transport.
 
 ---
 
-[Back to Index](./README.md) | [Prev: Units](./08-units.md) | [Next: Tech Tree](./10-tech-tree.md)
+[Back to Index](./index.md) | [Prev: Units](./08-units.md) | [Next: Tech Tree](./10-tech-tree.md)

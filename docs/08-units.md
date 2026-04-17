@@ -1,6 +1,6 @@
 # Units
 
-[Back to Index](./README.md) | [Prev: Resources](./07-resources.md) | [Next: Buildings](./09-buildings.md)
+[Back to Index](./index.md) | [Prev: Resources](./07-resources.md) | [Next: Buildings](./09-buildings.md)
 
 ---
 
@@ -187,4 +187,4 @@ When selected and commanded to move, 2 men appear carrying the wagon (visual onl
 
 ---
 
-[Back to Index](./README.md) | [Prev: Resources](./07-resources.md) | [Next: Buildings](./09-buildings.md)
+[Back to Index](./index.md) | [Prev: Resources](./07-resources.md) | [Next: Buildings](./09-buildings.md)

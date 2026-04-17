@@ -1,6 +1,6 @@
 # Environment - Season / Climate / Geographic Zone Impact Tables
 
-[Back to Index](./README.md) | [Prev: Environment](./04-environment.md) | [Next: GAIA System](./06-gaia.md)
+[Back to Index](./index.md) | [Prev: Environment](./04-environment.md) | [Next: GAIA System](./06-gaia.md)
 
 ---
 
@@ -362,4 +362,4 @@ These tables define the probability and effects of each climate type based on th
 
 ---
 
-[Back to Index](./README.md) | [Prev: Environment](./04-environment.md) | [Next: GAIA System](./06-gaia.md)
+[Back to Index](./index.md) | [Prev: Environment](./04-environment.md) | [Next: GAIA System](./06-gaia.md)
