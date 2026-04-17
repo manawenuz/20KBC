@@ -1,0 +1,230 @@
+<context>
+# Overview
+20,000 BC is a real-time strategy (RTS) game set in the prehistoric era. Players lead tribes through survival, resource management, and warfare. The game features dynamic environments (seasons, climate, day/night), a GAIA ecosystem (animals with herd AI), procedural map generation, and multiplayer support for up to 30 players in survival mode.
+
+This is a 2-developer project using Rust wherever possible. The game is in pre-production/prototyping phase.
+
+# Core Features
+- Real-time strategy gameplay with gather/build/fight core loop
+- 8 resource types (wood, stone, clay, water, food, skin, rope, supply) with derived resources
+- Unit progression: workers upgrade through 3 tiers (axes, spears, slings) with XP system
+- 8 building types: home base (mobile/settled), farms, supply depots, walls, towers, boats
+- 10-upgrade tech tree
+- GAIA ecosystem: 5 animal species with herd behavior, territory, reproduction
+- Dynamic environment: 4 seasons, 4 geographic zones, 6 climate types, natural disasters
+- Procedural map generation with regions, slopes, rivers, lakes
+- Multiplayer: LAN, online ranked (1v1/2v2), survival mode (20-30 players)
+- Campaign mode with scripted missions
+
+# User Experience
+- Target audience: RTS fans who enjoy Age of Empires, StarCraft, and survival games
+- Core loop: explore → gather resources → build base → train/upgrade units → expand → fight
+- Game modes: Custom Game, Campaign, Ranked Multiplayer, Survival, Tutorial
+- Player must manage supply chains (food + water = supply, units die without supply)
+- Strategic depth from seasons affecting resources, terrain slopes affecting combat, and tech tree choices
+
+# Team
+- Dev A: Engine/Systems (rendering, terrain, pathfinding, camera, networking, VFX, performance)
+- Dev B: Gameplay/AI (game logic, units, resources, buildings, AI opponents, GAIA, UI/HUD)
+</context>
+<PRD>
+# Technical Architecture
+
+## Codebase Structure
+The project uses a Rust workspace with engine-agnostic game logic:
+
+```
+20kbc/
+  game-core/           # Pure Rust library — ZERO engine dependency
+    src/
+      map/             # Terrain, tiles, regions, heightmap
+      unit/            # Stats, upgrades, XP, state machine
+      resource/        # Types, gathering, conversion
+      building/        # Types, placement, construction
+      combat/          # Damage, accuracy, armor, projectiles
+      economy/         # Supply chain, depot networks
+      tech/            # Tech tree, prerequisites
+      gaia/            # Herds, spawning, territory, behavior
+      environment/     # Seasons, climate, disasters, day/night
+      pathfinding/     # A*, flow fields, slope/river modifiers
+      simulation/      # Deterministic tick loop
+  game-client/         # Engine-specific (Godot gdext OR Bevy)
+  game-server/         # Headless simulation for multiplayer
+  game-data/           # TOML config for ALL stats
+  assets/              # Art, sound, placeholders
+```
+
+## Key Architectural Decisions
+- game-core is engine-agnostic: all game rules, stats, simulation in pure Rust
+- Data-driven: every number from design doc lives in TOML files, not Rust code
+- Tile + continuous hybrid: tile grid for buildings/resources, continuous coords for unit movement
+- Entity model: simple ID-based entities with component structs
+- Start with f32 in Phase 1-3, convert to fixed-point in Phase 4 for deterministic multiplayer
+
+## Engine Options (to be decided in Phase 0)
+1. Godot 4 + gdext (Rust bindings) — visual editor, proven engine, MIT license
+2. Bevy — pure Rust ECS, MIT/Apache-2.0, no editor, active RTS project exists
+3. Fyrox — stable 1.0, built-in editor, MIT, smaller community
+
+## Networking (Phase 4)
+- Deterministic lockstep for 1v1/2v2 (industry standard for RTS)
+- Server-authoritative for survival mode (20-30 players)
+
+# Development Roadmap
+
+## Phase 0: Technology Selection & Spike (4 weeks)
+
+### Sprint 0.1: Parallel Engine Spikes (Weeks 1-2)
+Each dev builds identical mini-prototype in different engine:
+- 64x64 tile terrain with heightmap rendering
+- 100 units with A* pathfinding on the grid
+- Camera controls: pan (WASD/edge scroll), zoom (scroll wheel), rotate (middle mouse)
+- Click-to-select (box select + click select), right-click-to-move
+- Basic UDP packet send/receive between two instances
+
+Dev A builds in Godot 4 + gdext, Dev B builds in Bevy.
+
+Evaluate (score 1-5): Rust ergonomics, pathfinding perf at 200 units, terrain rendering ease, build iteration speed, documentation quality, minimap feasibility, networking basics.
+
+### Sprint 0.2: Winner Deep Dive + Architecture (Weeks 3-4)
+- Take winning engine and build game-core/game-client split
+- Set up Rust workspace with Cargo.toml
+- Set up CI: cargo test, cargo clippy, cargo fmt --check (GitHub Actions)
+- Implement basic Map, Unit, Position types in game-core
+- Unit tests for A* pathfinding on simple grid
+- Go/no-go decision on engine choice
+
+## Phase 1: MVP Prototype — Playable 1v1 (Weeks 5-16)
+Scope: flat map, 3 resources (wood, stone, food), workers gather/build/fight, placeholder geometry, hotseat + basic AI.
+
+### Sprint 1.1: Terrain + Movement (Weeks 5-6)
+- Dev A: Flat tile-based terrain renderer (64x64), camera pan/zoom/rotate, click-to-select with box select, right-click-to-move command
+- Dev B: Map struct in game-core (tiles, walkability), Unit struct (position, speed, health, state), A* pathfinding on tile grid, unit state machine (Idle, Moving, Gathering, Attacking)
+- Deliverable: units spawn, select, pathfind, move on terrain
+
+### Sprint 1.2: Resource Gathering (Weeks 7-8)
+- Dev A: Render resource objects (trees=green boxes, stone=grey boxes, berries=red boxes), HUD with resource counters, minimap (colored pixel map)
+- Dev B: Resource system (Wood, Stone, Food types with amounts), gathering action (walk to resource, timer, pick up, deliver to depot), supply system (food+water=supply, 1/10s consumption), worker carry capacity, delivery to nearest depot
+- Deliverable: workers gather wood/stone/food, deliver to depot, die without supply
+
+### Sprint 1.3: Buildings (Weeks 9-10)
+- Dev A: Building placement ghost (green=valid, red=invalid), construction progress bar, fog of war (tile-based: unexplored/fog/visible)
+- Dev B: Home Base (train workers, 20 pop cap, supply depot role), Supply Depot (store resources, supply cover range), Farm (produce food 60/30s per worker). Construction: resource check, deduction, build timer. Supply cover range calculation.
+- Deliverable: place buildings, extend supply range, farms produce food
+
+### Sprint 1.4: Combat + Unit Upgrades (Weeks 11-12)
+- Dev A: Health bars over units, attack animation (lunge), death effects, placeholder sounds (beeps)
+- Dev B: Combat resolution (melee: damage-armor=HP loss), unit upgrades (Worker→Axes Level 2.1→Axes+Spear Level 3.1), ranged attack (projectile travel time, accuracy grid: 60% center, 10% each side), tech tree (Stone Tool, Stone Axe Upgrade, Rope, Skinning — 4 upgrades)
+- Deliverable: combat works, units upgrade, tech tree functional
+
+### Sprint 1.5: Two-Player + Win Condition (Weeks 13-14)
+- Dev A: Hotseat player switching (toggle P1/P2, switch fog of war), victory/defeat screen, game setup screen (pick starting positions)
+- Dev B: Player ownership on entities, win condition (destroy enemy Home Base), starting conditions (1 Home Base, 5 workers, starting resources per player), loot on Home Base destruction (80% resources to attacker)
+- Deliverable: two humans play a complete game on one machine
+
+### Sprint 1.6: Basic AI + Polish (Weeks 15-16)
+- Dev A: Save/load game state (serialize game-core), game speed controls (pause, 1x, 2x), performance profiling (200 units at 60fps), bug fixes
+- Dev B: Simple AI opponent (gather resources, build supply depot, train workers, upgrade to fighters, attack-move toward enemy base), AI difficulty: Easy (slower decisions), Normal (standard timing)
+- Deliverable: single player vs AI is playable, core loop validated
+
+## Phase 2: Core Systems (Weeks 17-30)
+- All 8 resource types + derived resources (supply, rope)
+- All 8 building types with full mechanics (walls, towers, boats, water well)
+- All unit types (male/female with different stats, healer, supply wagon)
+- Full 5-level upgrade path per gender
+- Full 10-upgrade tech tree
+- Procedural map generation (heightmap, rivers, lakes, regions)
+- AI overhaul (Scout/Gather/Build/Expand/Attack/Defend states, 3 difficulty levels)
+
+## Phase 3: World Systems (Weeks 31-44)
+- Season/climate system (4 seasons x 4 zones x 6 climates, probability tables)
+- Day/night cycle with sun rotation and shadows
+- GAIA animals (5 species with herd AI, territory, reproduction)
+- Natural disasters (floods, wildfires, famines, fog, wind)
+- Terrain slopes with movement/range modifiers
+- Water body mechanics (river sections, frozen lakes, ice breaking)
+
+## Phase 4: Multiplayer (Weeks 45-56)
+- Deterministic simulation (fixed-point math, seeded RNG, BTreeMap)
+- LAN lockstep networking
+- Online play with relay server
+- Ranked system (ELO, matchmaking)
+- Survival mode (20-30 players, dedicated server)
+
+## Phase 5: Content & Polish (Weeks 57-72)
+- Campaign mode (8-12 missions)
+- Real 3D art assets
+- Sound/music
+- UI polish, tutorial, accessibility
+- Balance tuning, platform builds
+
+# Logical Dependency Chain
+
+Foundation (must build first):
+1. Rust workspace + CI setup
+2. Map/terrain data structure (tiles, walkability)
+3. Entity system (ID, position, health, ownership)
+4. Movement/pathfinding (A* on grid)
+5. Camera + input (select, command)
+
+Economy layer (depends on foundation):
+6. Resource types + amounts on map
+7. Gathering actions (walk to resource, timer, carry, deliver)
+8. Supply system (food+water→supply, consumption, cover range)
+9. Building placement + construction
+
+Combat layer (depends on economy):
+10. Unit stats (health, armor, damage)
+11. Melee combat resolution
+12. Ranged combat (projectile, accuracy)
+13. Unit upgrade paths + tech tree
+
+Game layer (depends on combat):
+14. Player ownership + fog of war
+15. Win condition
+16. AI opponent
+17. Save/load
+
+World layer (depends on game):
+18. Procedural map generation
+19. Season/climate system
+20. GAIA animals + herd behavior
+21. Natural disasters
+
+Multiplayer layer (depends on everything):
+22. Deterministic simulation
+23. Lockstep networking
+24. Server infrastructure
+
+# Risks and Mitigations
+
+1. Engine choice may not work for RTS scale
+   - Mitigation: parallel spikes in Phase 0, game-core has zero engine dependency so we can swap
+2. Pathfinding performance with 200+ units
+   - Mitigation: flow fields for group movement, A* for individuals, spatial grid from day one
+3. Supply system complexity (shared depots, cover ranges, auto-conversion)
+   - Mitigation: start with global stockpile in Phase 1, add depot networks in Phase 2
+4. Scope creep
+   - Mitigation: strict sprint deliverables, backlog for non-sprint features
+5. Deterministic simulation is hard
+   - Mitigation: defer to Phase 4, use f32 early, convert to fixed-point when needed
+6. AI is hard to make good
+   - Mitigation: scripted behavior first (predictable > buggy "smart"), decision trees later
+
+# Appendix
+
+## Key Design Doc References
+- docs/08-units.md — all unit stats and upgrade costs
+- docs/09-buildings.md — all building stats and placement rules
+- docs/05-environment-season-climate-tables.md — climate probability tables
+- docs/06-gaia.md — animal herd behavior and environment objects
+- docs/10-tech-tree.md — upgrade prerequisites and effects
+- docs/02-core-mechanics.md — ranged accuracy, movement rules, skill XP
+
+## Research References
+- docs/research/engine-comparison.md — Bevy vs Godot+gdext vs Fyrox
+- docs/research/networking-architecture.md — lockstep vs server-authoritative
+- docs/research/map-generation.md — procedural terrain pipeline
+- docs/research/asset-strategy.md — art per phase
+- docs/research/system-dependencies.md — full dependency graph
+</PRD>

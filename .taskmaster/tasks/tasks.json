@@ -1,0 +1,373 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Godot + gdext Engine Spike",
+        "description": "Build a mini-prototype in Godot 4 with gdext Rust bindings to evaluate the engine for RTS development.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "Dev A builds: 64x64 tile terrain with heightmap, 100 units with A* pathfinding, camera controls (pan/zoom/rotate), click-to-select and right-click-to-move, basic UDP packet send/receive between two instances.\n\nEvaluate (score 1-5): Rust ergonomics, pathfinding perf at 200 units, terrain rendering ease, build iteration speed, documentation quality, minimap feasibility, basic UDP networking.\n\nRef: docs/research/engine-comparison.md",
+        "testStrategy": "Prototype runs at 60fps with 200 units on 64x64 map. Camera controls are responsive. Units pathfind correctly. UDP packets transmit between two instances. Write evaluation report with scores.",
+        "subtasks": [
+          { "id": "1.1", "title": "Set up Godot 4 project with gdext Rust bindings", "status": "pending" },
+          { "id": "1.2", "title": "Render 64x64 tile-based terrain from heightmap data", "status": "pending" },
+          { "id": "1.3", "title": "Implement camera: pan/zoom/rotate", "status": "pending" },
+          { "id": "1.4", "title": "Spawn 100 units with A* pathfinding on tile grid", "status": "pending" },
+          { "id": "1.5", "title": "Click-to-select (single + box) and right-click-to-move", "status": "pending" },
+          { "id": "1.6", "title": "Basic UDP send/receive between two instances", "status": "pending" },
+          { "id": "1.7", "title": "Write evaluation report (score 1-5 per criterion)", "status": "pending" }
+        ]
+      },
+      {
+        "id": "2",
+        "title": "Bevy Engine Spike",
+        "description": "Build identical mini-prototype in Bevy to compare against Godot+gdext for RTS development.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "details": "Dev B builds same prototype: 64x64 tile terrain, 100 units with A* pathfinding, camera controls, selection/commands, UDP networking. Same evaluation criteria as task 1.\n\nRef: docs/research/engine-comparison.md",
+        "testStrategy": "Same criteria as Godot spike. Write evaluation report with identical scoring rubric for comparison.",
+        "subtasks": [
+          { "id": "2.1", "title": "Set up Bevy project with ECS architecture", "status": "pending" },
+          { "id": "2.2", "title": "Render 64x64 tile terrain from heightmap", "status": "pending" },
+          { "id": "2.3", "title": "Implement camera: pan/zoom/rotate", "status": "pending" },
+          { "id": "2.4", "title": "Spawn 100 units with A* pathfinding", "status": "pending" },
+          { "id": "2.5", "title": "Click-to-select and right-click-to-move", "status": "pending" },
+          { "id": "2.6", "title": "Basic UDP send/receive between two instances", "status": "pending" },
+          { "id": "2.7", "title": "Write evaluation report", "status": "pending" }
+        ]
+      },
+      {
+        "id": "3",
+        "title": "Engine Decision & Workspace Setup",
+        "description": "Compare both spikes, pick engine. Set up Rust workspace with game-core/game-client crates, CI pipeline, and project conventions.",
+        "status": "pending",
+        "dependencies": ["1", "2"],
+        "priority": "high",
+        "details": "1. Compare evaluation reports side-by-side, decide on engine (if both marginal, Godot wins for editor/asset pipeline)\n2. Create Rust workspace: game-core (pure Rust, zero engine deps), game-client (engine-specific), game-data (TOML configs)\n3. GitHub Actions CI: cargo test, cargo clippy, cargo fmt --check\n4. CONTRIBUTING.md with code conventions\n\nArchitecture: game-core is engine-agnostic. All game rules/stats/simulation live here. Engine layer is thin rendering/input shell.\n\nRef: docs/research/system-dependencies.md",
+        "testStrategy": "CI passes on push. Both crates compile. game-core has zero engine dependencies in Cargo.toml.",
+        "subtasks": [
+          { "id": "3.1", "title": "Compare spike reports, document decision", "status": "pending" },
+          { "id": "3.2", "title": "Create Rust workspace with Cargo.toml (game-core, game-client)", "status": "pending" },
+          { "id": "3.3", "title": "Set up GitHub Actions CI", "status": "pending" },
+          { "id": "3.4", "title": "Create game-data/ with TOML config structure", "status": "pending" },
+          { "id": "3.5", "title": "Write CONTRIBUTING.md", "status": "pending" }
+        ]
+      },
+      {
+        "id": "4",
+        "title": "Game-Core Foundation Types",
+        "description": "Core data types in game-core: Map, Unit, Position, Entity, Player, World structs.",
+        "status": "pending",
+        "dependencies": ["3"],
+        "priority": "high",
+        "details": "Map struct: 2D tile grid, terrain type + walkability per tile. TilePosition (grid) and WorldPosition (continuous) coords. EntityId + PlayerId types. Unit struct: position, health, speed, state machine. World struct: central game state container (entities, map, players, tick counter).\n\nDesign decision: tile grid for buildings/resources, continuous coords for unit movement.\n\nRef: docs/research/system-dependencies.md — Foundation Layer",
+        "testStrategy": "Unit tests for all types. World can spawn entities, query by ID, remove dead entities. Map correctly reports walkability.",
+        "subtasks": [
+          { "id": "4.1", "title": "Map struct: 2D tile grid with terrain type and walkability", "status": "pending" },
+          { "id": "4.2", "title": "TilePosition and WorldPosition types with conversions", "status": "pending" },
+          { "id": "4.3", "title": "EntityId, PlayerId, Entity struct with components", "status": "pending" },
+          { "id": "4.4", "title": "Unit struct: position, health, speed, state machine", "status": "pending" },
+          { "id": "4.5", "title": "World struct: entities, map, players, tick counter", "status": "pending" },
+          { "id": "4.6", "title": "Unit tests for all core types", "status": "pending" }
+        ]
+      },
+      {
+        "id": "5",
+        "title": "A* Pathfinding System",
+        "description": "A* pathfinding on tile grid in game-core with movement costs and performance for 200+ units.",
+        "status": "pending",
+        "dependencies": ["4"],
+        "priority": "high",
+        "details": "A* on tile grid with configurable heuristic. Movement cost per tile type (normal=1, slow=2, impassable=inf). Path caching for repeated requests. Must handle 200+ concurrent pathfinding requests at 60fps (under 16ms per frame total).\n\nConsider using `pathfinding` crate or rolling own for determinism control.",
+        "testStrategy": "Benchmark: 200 concurrent paths on 64x64 grid under 16ms. Unit tests: shortest path correctness, obstacle avoidance, no-path-exists returns None.",
+        "subtasks": [
+          { "id": "5.1", "title": "Implement A* algorithm on tile grid", "status": "pending" },
+          { "id": "5.2", "title": "Movement cost per tile type", "status": "pending" },
+          { "id": "5.3", "title": "Path caching and request batching", "status": "pending" },
+          { "id": "5.4", "title": "Benchmark: 200 paths on 64x64 under 16ms", "status": "pending" },
+          { "id": "5.5", "title": "Tests: correctness, obstacles, no-path", "status": "pending" }
+        ]
+      },
+      {
+        "id": "6",
+        "title": "Terrain Renderer & Camera",
+        "description": "Render flat tile terrain (64x64) with camera controls: pan, zoom, rotate.",
+        "status": "pending",
+        "dependencies": ["3"],
+        "priority": "high",
+        "details": "Create terrain mesh/sprites from game-core Map data. Tiles colored by type (grass=green, water=blue, rock=grey). Camera: WASD + edge scroll for pan, scroll wheel for zoom (min/max bounds), middle mouse for rotate.",
+        "testStrategy": "Terrain renders correctly with colored tiles. Camera responds to all inputs smoothly. No rendering artifacts at zoom extremes.",
+        "subtasks": [
+          { "id": "6.1", "title": "Terrain mesh from Map data", "status": "pending" },
+          { "id": "6.2", "title": "Camera pan (WASD + edge scroll)", "status": "pending" },
+          { "id": "6.3", "title": "Camera zoom (scroll wheel, bounded)", "status": "pending" },
+          { "id": "6.4", "title": "Camera rotate (middle mouse)", "status": "pending" }
+        ]
+      },
+      {
+        "id": "7",
+        "title": "Unit Selection & Commands",
+        "description": "Click-to-select, box/drag select, right-click-to-move. Units rendered as colored capsules.",
+        "status": "pending",
+        "dependencies": ["6"],
+        "priority": "high",
+        "details": "Render units as colored capsules (blue=male, pink=female). Single-click select with highlight ring. Box/drag select for groups. Right-click terrain to move (issues pathfind command). Selected unit info panel showing health and state.",
+        "testStrategy": "Single and multi-select work. Right-click moves units along correct path. Selection indicator visible. Info panel updates.",
+        "subtasks": [
+          { "id": "7.1", "title": "Render units as colored capsules", "status": "pending" },
+          { "id": "7.2", "title": "Single-click select with indicator", "status": "pending" },
+          { "id": "7.3", "title": "Box/drag select for groups", "status": "pending" },
+          { "id": "7.4", "title": "Right-click-to-move command", "status": "pending" },
+          { "id": "7.5", "title": "Selected unit info panel", "status": "pending" }
+        ]
+      },
+      {
+        "id": "8",
+        "title": "Unit State Machine & Movement",
+        "description": "State machine (Idle/Moving/Gathering/Attacking) in game-core. Units follow A* paths with collision avoidance.",
+        "status": "pending",
+        "dependencies": ["4", "5"],
+        "priority": "high",
+        "details": "State transitions: Idle→Moving (on move command), Moving→Idle (arrived), Idle→Gathering (on gather command), Idle→Attacking (on attack command). Units follow path waypoints at configured speed. Basic collision avoidance (push apart overlapping units).\n\nRef: docs/08-units.md — movement speeds",
+        "testStrategy": "Tests: state transitions fire correctly, units arrive at destination, gathering/attacking states stub correctly, overlapping units push apart.",
+        "subtasks": [
+          { "id": "8.1", "title": "State machine: Idle↔Moving transitions", "status": "pending" },
+          { "id": "8.2", "title": "Path following with configurable speed", "status": "pending" },
+          { "id": "8.3", "title": "Gathering and Attacking state stubs", "status": "pending" },
+          { "id": "8.4", "title": "Basic unit collision avoidance", "status": "pending" },
+          { "id": "8.5", "title": "Tests: transitions, movement, arrival", "status": "pending" }
+        ]
+      },
+      {
+        "id": "9",
+        "title": "Resource System",
+        "description": "3 resource types (Wood, Stone, Food), resource nodes on map, gathering action with timers and carry capacity.",
+        "status": "pending",
+        "dependencies": ["8"],
+        "priority": "high",
+        "details": "Resource enum: Wood, Stone, Food. ResourceNode: type, amount, position on map. Gathering: unit walks to node, waits gather_time (wood=varies by tree size, stone=1s small/10s big, food=5s), picks up min(remaining, capacity), walks to nearest depot, deposits into player stockpile.\n\nCarry capacity: 15 (male), 10 (female). Stone special: 1 small stone per trip = 20 stone resources.\n\nRef: docs/03-actions.md, docs/07-resources.md",
+        "testStrategy": "Tests: full gather cycle (walk→gather→carry→deliver), capacity limits, resource depletion (node empty), nearest depot selection.",
+        "subtasks": [
+          { "id": "9.1", "title": "Resource enum and ResourceNode struct", "status": "pending" },
+          { "id": "9.2", "title": "Place resource nodes on map", "status": "pending" },
+          { "id": "9.3", "title": "Gathering action: walk, timer, pickup", "status": "pending" },
+          { "id": "9.4", "title": "Delivery to nearest depot", "status": "pending" },
+          { "id": "9.5", "title": "Carry capacity per unit type", "status": "pending" },
+          { "id": "9.6", "title": "Tests: gather cycle, limits, depletion", "status": "pending" }
+        ]
+      },
+      {
+        "id": "10",
+        "title": "Supply System",
+        "description": "Supply mechanics: food+water=supply auto-conversion, unit consumption (1/10s), health drain outside depot range, auto-heal in range.",
+        "status": "pending",
+        "dependencies": ["9"],
+        "priority": "high",
+        "details": "1 food + 1 water = 1 supply (automatic conversion). Units drain 1 supply/10s from player stockpile. Supply reserve per unit (male=10, female=7). Outside depot range: use reserve first, then lose health at consumption_rate*3. Auto-heal in range: 1 HP/10s.\n\nRef: docs/07-resources.md, docs/09-buildings.md — Supply Depot",
+        "testStrategy": "Tests: conversion rate, consumption timing, reserve usage, health drain when starving, auto-heal restores HP.",
+        "subtasks": [
+          { "id": "10.1", "title": "Supply conversion: food + water → supply", "status": "pending" },
+          { "id": "10.2", "title": "Unit consumption: 1 supply per 10s", "status": "pending" },
+          { "id": "10.3", "title": "Supply reserve per unit type", "status": "pending" },
+          { "id": "10.4", "title": "Health drain when no supply", "status": "pending" },
+          { "id": "10.5", "title": "Auto-heal when in supply range", "status": "pending" },
+          { "id": "10.6", "title": "Tests: conversion, consumption, drain, heal", "status": "pending" }
+        ]
+      },
+      {
+        "id": "11",
+        "title": "HUD, Resource Display & Minimap",
+        "description": "Resource counters HUD, resource nodes rendered on map as colored boxes, basic minimap.",
+        "status": "pending",
+        "dependencies": ["6", "9"],
+        "priority": "medium",
+        "details": "Top HUD: Wood, Stone, Food, Supply, Population counters. Resource nodes: trees=green boxes, stone=grey, berries=red. Minimap: small colored pixel map (terrain + units + resources). Carrying indicator on gathering units.",
+        "testStrategy": "HUD updates when resources change. Minimap shows correct unit/resource positions. Carrying indicator visible during gather.",
+        "subtasks": [
+          { "id": "11.1", "title": "Resource counters HUD", "status": "pending" },
+          { "id": "11.2", "title": "Render resource nodes as colored boxes", "status": "pending" },
+          { "id": "11.3", "title": "Minimap with terrain/units/resources", "status": "pending" },
+          { "id": "11.4", "title": "Unit carrying indicator", "status": "pending" }
+        ]
+      },
+      {
+        "id": "12",
+        "title": "Building System",
+        "description": "Building placement and construction: Home Base, Supply Depot, Farm with supply cover range and population cap.",
+        "status": "pending",
+        "dependencies": ["10"],
+        "priority": "high",
+        "details": "Building struct: type, health, armor, size, owner, construction progress. Home Base (8x8x3): train workers, 20 pop cap, acts as supply depot. Supply Depot (2x2x2): supply cover range, shared stockpile. Farm (10x10x1): 60 food/30s per worker, max 2 workers.\n\nConstruction: check resources, deduct immediately, build timer. Placement: must be in supply cover range of Home Base.\n\nRef: docs/09-buildings.md",
+        "testStrategy": "Tests: placement validation (terrain, range, overlap), construction flow (resources deducted, timer, completion), supply coverage calculation, population cap enforcement.",
+        "subtasks": [
+          { "id": "12.1", "title": "Building struct with all fields", "status": "pending" },
+          { "id": "12.2", "title": "Home Base: train workers, pop cap, supply", "status": "pending" },
+          { "id": "12.3", "title": "Supply Depot: cover range, shared stockpile", "status": "pending" },
+          { "id": "12.4", "title": "Farm: food generation, max workers", "status": "pending" },
+          { "id": "12.5", "title": "Construction: resource check, deduct, timer", "status": "pending" },
+          { "id": "12.6", "title": "Supply cover range calculation", "status": "pending" },
+          { "id": "12.7", "title": "Tests: placement, construction, coverage, pop cap", "status": "pending" }
+        ]
+      },
+      {
+        "id": "13",
+        "title": "Building Placement UI & Fog of War",
+        "description": "Placement ghost (valid/invalid), construction progress bar, tile-based fog of war per player.",
+        "status": "pending",
+        "dependencies": ["6", "12"],
+        "priority": "medium",
+        "details": "Placement ghost: transparent building preview at cursor, green=valid, red=invalid (terrain/range/overlap checks). Progress bar above buildings under construction. Fog of war: tiles are unexplored (black), fogged (dim), or visible based on unit sight ranges. Supply range circle indicator when placing depot.",
+        "testStrategy": "Ghost follows cursor correctly. Color changes based on validity. Fog reveals correctly based on unit positions. Supply range circle accurate.",
+        "subtasks": [
+          { "id": "13.1", "title": "Placement ghost with validity coloring", "status": "pending" },
+          { "id": "13.2", "title": "Construction progress bar", "status": "pending" },
+          { "id": "13.3", "title": "Fog of war (unexplored/fogged/visible)", "status": "pending" },
+          { "id": "13.4", "title": "Supply range indicator on placement", "status": "pending" }
+        ]
+      },
+      {
+        "id": "14",
+        "title": "Combat System",
+        "description": "Melee and ranged combat: damage-armor=HP loss, projectile with travel time and accuracy grid, friendly fire, unit death.",
+        "status": "pending",
+        "dependencies": ["8"],
+        "priority": "high",
+        "details": "Melee: (damage - target_armor) HP loss per hit at attack_speed. Ranged: projectile at speed 20/s, accuracy grid (60% center, 10% each of 4 adjacent cells). If projectile hits another unit at impact location, that unit takes damage. Unit removed on death (health<=0). Attack-move: move toward target, attack when in range.\n\nRef: docs/02-core-mechanics.md — Ranged Weapon Attack Accuracy",
+        "testStrategy": "Tests: melee damage = attack - armor, ranged accuracy distribution over 1000 attacks matches 60/10/10/10/10, friendly fire hits nearby unit, death removes entity, attack-move transitions correctly.",
+        "subtasks": [
+          { "id": "14.1", "title": "Melee attack resolution", "status": "pending" },
+          { "id": "14.2", "title": "Ranged attack: projectile with travel time", "status": "pending" },
+          { "id": "14.3", "title": "Accuracy grid (60% center)", "status": "pending" },
+          { "id": "14.4", "title": "Friendly fire on impact location", "status": "pending" },
+          { "id": "14.5", "title": "Unit death and removal", "status": "pending" },
+          { "id": "14.6", "title": "Attack-move command", "status": "pending" },
+          { "id": "14.7", "title": "Tests: damage, accuracy, death", "status": "pending" }
+        ]
+      },
+      {
+        "id": "15",
+        "title": "Unit Upgrades & Tech Tree (Phase 1 Subset)",
+        "description": "Unit upgrade paths (Worker→Axes→Axes+Spear) and 4 initial tech tree upgrades researched at Home Base.",
+        "status": "pending",
+        "dependencies": ["12", "14"],
+        "priority": "high",
+        "details": "Upgrades: Level 1→2.1 Axes (10 wood, 20 stone, 1 rope), Level 2.1→3.1 Axes+Spear (50 wood, 50 stone, 1 rope). Stat changes on upgrade per docs/08-units.md.\n\nTech tree (4 of 10): Stone Tool (enables unit upgrades), Stone Axe Upgrade (+20% axe damage), Rope (5 grass=1 rope auto-convert), Skinning (gather skin from animals).\n\nResearch: queue at Home Base, timer, apply effects globally when done.\n\nRef: docs/10-tech-tree.md, docs/08-units.md",
+        "testStrategy": "Tests: upgrade prerequisites enforced, stats change correctly, tech research timer works, global effects apply to all units.",
+        "subtasks": [
+          { "id": "15.1", "title": "Upgrade path: L1→L2.1 Axes", "status": "pending" },
+          { "id": "15.2", "title": "Upgrade path: L2.1→L3.1 Axes+Spear throw", "status": "pending" },
+          { "id": "15.3", "title": "Stat changes on upgrade", "status": "pending" },
+          { "id": "15.4", "title": "Tech tree: 4 upgrades with prerequisites", "status": "pending" },
+          { "id": "15.5", "title": "Research queue at Home Base", "status": "pending" },
+          { "id": "15.6", "title": "Tests: prerequisites, stats, research", "status": "pending" }
+        ]
+      },
+      {
+        "id": "16",
+        "title": "Combat Visuals & Placeholder Audio",
+        "description": "Health bars, attack animations, projectile rendering, death effects, placeholder beep sounds.",
+        "status": "pending",
+        "dependencies": ["7", "14"],
+        "priority": "medium",
+        "details": "Health bar above each unit (green→yellow→red). Melee: unit lunges. Ranged: small sphere projectile arc. Death: fade out. Placeholder sounds: beep variations for attack, gather, select, build, death.",
+        "testStrategy": "Health bars update in real-time. Projectiles visible and travel correctly. Death animation plays. Sounds trigger on correct events.",
+        "subtasks": [
+          { "id": "16.1", "title": "Health bars above units", "status": "pending" },
+          { "id": "16.2", "title": "Melee attack animation", "status": "pending" },
+          { "id": "16.3", "title": "Ranged projectile rendering", "status": "pending" },
+          { "id": "16.4", "title": "Death effect", "status": "pending" },
+          { "id": "16.5", "title": "Placeholder beep sounds", "status": "pending" }
+        ]
+      },
+      {
+        "id": "17",
+        "title": "Two-Player Hotseat & Game Setup",
+        "description": "Hotseat mode: toggle players with separate fog of war. Game setup screen. Victory/defeat screens.",
+        "status": "pending",
+        "dependencies": ["13", "16"],
+        "priority": "high",
+        "details": "Player switching button toggles active player, swaps fog of war and camera position. Game setup: select map, pick starting positions. Victory screen on enemy Home Base destruction. Performance: 200 total units at 60fps.",
+        "testStrategy": "Player switch toggles fog correctly. Both players can issue commands on their turn. Victory triggers correctly. 60fps maintained.",
+        "subtasks": [
+          { "id": "17.1", "title": "Player switching with fog swap", "status": "pending" },
+          { "id": "17.2", "title": "Game setup screen", "status": "pending" },
+          { "id": "17.3", "title": "Victory/defeat screens", "status": "pending" },
+          { "id": "17.4", "title": "Performance: 200 units at 60fps", "status": "pending" }
+        ]
+      },
+      {
+        "id": "18",
+        "title": "Player Ownership & Win Condition",
+        "description": "Player ownership on all entities, win condition (destroy Home Base), loot system, starting conditions.",
+        "status": "pending",
+        "dependencies": ["12", "14"],
+        "priority": "high",
+        "details": "PlayerId on all entities. Win: all enemy Home Bases destroyed. Loot: 80% of victim's resources to attacker on Home Base destruction. Starting conditions per player: 1 Home Base, 5 workers, 200 food, 100 wood, 100 stone.\n\nRef: docs/09-buildings.md — Home Base loot",
+        "testStrategy": "Tests: ownership enforced (can't command enemy units), win triggers correctly, loot calculation accurate, starting resources spawn.",
+        "subtasks": [
+          { "id": "18.1", "title": "PlayerId on all entities", "status": "pending" },
+          { "id": "18.2", "title": "Win condition: enemy bases destroyed", "status": "pending" },
+          { "id": "18.3", "title": "Loot: 80% resources on base destruction", "status": "pending" },
+          { "id": "18.4", "title": "Starting conditions per player", "status": "pending" },
+          { "id": "18.5", "title": "Tests: ownership, win, loot", "status": "pending" }
+        ]
+      },
+      {
+        "id": "19",
+        "title": "Basic AI Opponent",
+        "description": "Simple AI: gather, build, train, upgrade, attack-move. Two difficulty levels.",
+        "status": "pending",
+        "dependencies": ["18"],
+        "priority": "high",
+        "details": "AI decision loop every N ticks: evaluate state, choose action. Phases: gather (assign idle workers to nearest resources), build (supply depot, farm when affordable), train (workers up to pop cap), upgrade (research tech, upgrade workers to fighters), attack (attack-move all fighters toward enemy base).\n\nDifficulty: Easy=0.5x decision speed, Normal=1x.\n\nThis is the FIRST REAL PLAYTEST MILESTONE — single player vs AI validates the core game loop.",
+        "testStrategy": "AI plays a complete game without crashing. AI gathers resources, builds buildings, trains/upgrades units, and attacks. Easy AI is beatable by a new player. Normal AI provides a challenge.",
+        "subtasks": [
+          { "id": "19.1", "title": "AI decision loop (eval state, choose action)", "status": "pending" },
+          { "id": "19.2", "title": "AI gather: assign workers to resources", "status": "pending" },
+          { "id": "19.3", "title": "AI build: place depot and farm", "status": "pending" },
+          { "id": "19.4", "title": "AI train: workers up to pop cap", "status": "pending" },
+          { "id": "19.5", "title": "AI upgrade: research and upgrade units", "status": "pending" },
+          { "id": "19.6", "title": "AI attack: attack-move toward enemy base", "status": "pending" },
+          { "id": "19.7", "title": "Difficulty scaling: Easy 0.5x, Normal 1x", "status": "pending" }
+        ]
+      },
+      {
+        "id": "20",
+        "title": "Save/Load & Game Speed Controls",
+        "description": "Serialize game state for save/load. Pause, 1x, 2x speed controls. Performance profiling.",
+        "status": "pending",
+        "dependencies": ["17"],
+        "priority": "medium",
+        "details": "Serialize World struct to JSON or bincode (save). Deserialize to restore (load). Game speed: pause (0x), normal (1x), fast (2x) via keyboard shortcuts. Profile performance to ensure 200 units at 60fps, identify and fix bottlenecks.",
+        "testStrategy": "Save game, load game, verify state matches. Speed controls change simulation rate. 200 units maintain 60fps.",
+        "subtasks": [
+          { "id": "20.1", "title": "Serialize World to file (save)", "status": "pending" },
+          { "id": "20.2", "title": "Deserialize World from file (load)", "status": "pending" },
+          { "id": "20.3", "title": "Speed controls: pause/1x/2x", "status": "pending" },
+          { "id": "20.4", "title": "Performance profiling and optimization", "status": "pending" }
+        ]
+      },
+      {
+        "id": "21",
+        "title": "Data-Driven Stats (TOML Config)",
+        "description": "Move all hardcoded stats to TOML files. Game-core loads config at startup. Validate against design doc.",
+        "status": "pending",
+        "dependencies": ["4"],
+        "priority": "medium",
+        "details": "Create TOML files in game-data/: units.toml (all stats from docs/08-units.md for male/female at all 5 levels), buildings.toml (from docs/09-buildings.md), resources.toml (gather times, amounts), tech_tree.toml (costs, prerequisites, effects from docs/10-tech-tree.md).\n\nConfig loader reads at startup. Both devs can tweak balance without recompiling.",
+        "testStrategy": "All game values match design doc. Changing TOML values changes in-game behavior without recompile. Missing/invalid config values produce clear error messages.",
+        "subtasks": [
+          { "id": "21.1", "title": "game-data/units.toml with all unit stats", "status": "pending" },
+          { "id": "21.2", "title": "game-data/buildings.toml with all building stats", "status": "pending" },
+          { "id": "21.3", "title": "game-data/resources.toml with amounts and times", "status": "pending" },
+          { "id": "21.4", "title": "game-data/tech_tree.toml with costs and effects", "status": "pending" },
+          { "id": "21.5", "title": "Config loader in game-core", "status": "pending" },
+          { "id": "21.6", "title": "Validate all values against design doc", "status": "pending" }
+        ]
+      }
+    ]
+  }
+}
