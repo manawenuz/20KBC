@@ -60,6 +60,11 @@ const config = {
             label: 'Docs',
           },
           {
+            to: '/tasks',
+            label: 'Tasks',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/manawenuz/20KBC',
             label: 'GitHub',
             position: 'right',
