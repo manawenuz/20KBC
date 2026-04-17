@@ -17,6 +17,16 @@ A prehistoric real-time strategy game set in the 20,000 BC era, where players le
 | [Buildings](./09-buildings.md) | Home base, farm, supply depot, water well, walls, towers, boats |
 | [Tech Tree](./10-tech-tree.md) | All upgrades and their effects |
 
+## Research & Technical Analysis
+
+| Document | Description |
+|----------|-------------|
+| [Engine Comparison](./research/engine-comparison.md) | Bevy vs Godot+gdext vs Fyrox evaluation |
+| [Networking Architecture](./research/networking-architecture.md) | Deterministic lockstep vs server-authoritative |
+| [Map Generation](./research/map-generation.md) | Procedural terrain, rivers, biomes |
+| [Asset Strategy](./research/asset-strategy.md) | Art pipeline by phase, budget estimates |
+| [System Dependencies](./research/system-dependencies.md) | Full dependency graph, build order |
+
 ## About This Project
 
 - **Genre**: Real-time Strategy (RTS) with survival elements
