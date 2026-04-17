@@ -1,6 +1,6 @@
 site_name: "20,000 BC - Game Design"
 site_description: "A prehistoric real-time strategy game set in the 20,000 BC era"
-site_url: "https://manawenuz.github.io/20KBC/"
+site_url: ""
 
 theme:
   name: material
@@ -58,11 +58,5 @@ markdown_extensions:
   - pymdownx.details
   - attr_list
   - md_in_html
-
-extra_css:
-  - assets/css/auth.css
-
-extra_javascript:
-  - assets/js/auth.js
 
 docs_dir: docs
