@@ -25,6 +25,7 @@ theme:
     - toc.integrate
     - search.suggest
     - content.tabs.link
+  custom_dir: overrides
   icon:
     repo: fontawesome/brands/github
 
@@ -58,5 +59,8 @@ markdown_extensions:
   - pymdownx.details
   - attr_list
   - md_in_html
+
+extra_css:
+  - stylesheets/extra.css
 
 docs_dir: docs
