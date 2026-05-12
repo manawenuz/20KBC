@@ -32,6 +32,17 @@ impl INode3D for BuildingNode {
                     // WC3 buildings use the same ~1cm-per-unit scale.
                     n.set_scale(Vector3::new(0.02, 0.02, 0.02));
                 }
+                // Paint untextured submeshes with a sensible fallback
+                // per building. The altar's giant white banner gets a
+                // royal blue here; the townhall's untextured roof
+                // pieces get a slate grey.
+                let fallback = match self.kind {
+                    1 => Color { r: 0.18, g: 0.28, b: 0.65, a: 1.0 }, // altar banner blue
+                    2 => Color { r: 0.55, g: 0.45, b: 0.30, a: 1.0 }, // barracks brown
+                    3 => Color { r: 0.40, g: 0.42, b: 0.45, a: 1.0 }, // townhall slate
+                    _ => Color { r: 0.55, g: 0.55, b: 0.55, a: 1.0 },
+                };
+                crate::material_tint::paint_untextured(&inst, fallback);
                 self.base_mut().add_child(&inst);
                 return;
             }

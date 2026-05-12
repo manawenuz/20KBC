@@ -8,6 +8,7 @@ mod day_night;
 mod frame_time_label;
 mod gaia_node;
 mod hud;
+mod material_tint;
 mod resource_node_visual;
 mod selection_manager;
 mod sim_bridge;

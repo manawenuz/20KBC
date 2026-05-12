@@ -97,6 +97,11 @@ impl INode3D for UnitNode {
                     node3d.set_scale(Vector3::new(0.02, 0.02, 0.02));
                     node3d.set_position(Vector3::new(0.0, 0.0, 0.0));
                 }
+                // Paint untextured submeshes leather-brown so the
+                // peasant doesn't show pure-white blobs where the MDX
+                // had material layers with no resolved texture.
+                let leather = Color { r: 0.45, g: 0.30, b: 0.18, a: 1.0 };
+                crate::material_tint::paint_untextured(&instance, leather);
                 self.base_mut().add_child(&instance);
                 if let Some(mut anim) = Self::find_anim_player(&instance) {
                     self.anim_map = Self::build_anim_map(&anim);
