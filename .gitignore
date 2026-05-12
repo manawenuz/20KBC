@@ -33,3 +33,6 @@ website/node_modules/
 website/build/
 website/.docusaurus/
 logs/
+.worktrees/
+scripts/asset-extract/venv/
+target/
