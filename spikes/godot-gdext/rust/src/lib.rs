@@ -1,6 +1,7 @@
 use godot::prelude::*;
 
 mod camera_controller;
+mod day_night;
 mod gaia_node;
 mod hud;
 mod selection_manager;
