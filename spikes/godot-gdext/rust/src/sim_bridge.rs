@@ -107,4 +107,20 @@ impl SimBridge {
             .map(|s| s.iter_units().filter(|u| !u.is_dead).count() as i64)
             .unwrap_or(0)
     }
+
+    /// Returns GAIA entity positions as an `Array<Vector2>`: [(x, z), …].
+    ///
+    /// Only entities with hp > 0.0 are included.
+    #[func]
+    pub fn get_gaia_positions(&self) -> Array<Vector2> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for g in &sim.gaia {
+                if g.hp > 0.0 {
+                    arr.push(Vector2::new(g.pos.x, g.pos.y));
+                }
+            }
+        }
+        arr
+    }
 }
