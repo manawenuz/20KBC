@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Minimal WC3 MDX → glTF 2.0 converter.
-Parses MDX version 800 static mesh + UVs + first texture layer + bones/skinning.
+Parses MDX version 800 static mesh + UVs + first texture layer + bones/skinning + animations.
 """
 
 import argparse
@@ -146,12 +146,24 @@ class Material:
         self.layers = layers
 
 
+class Sequence:
+    def __init__(self, name: str, start_ms: int, end_ms: int, move_speed: float, loop: bool):
+        self.name = name
+        self.start_ms = start_ms
+        self.end_ms = end_ms
+        self.move_speed = move_speed
+        self.loop = loop
+
+
 class Bone:
     def __init__(self, name: str, object_id: int, parent_id: int, flags: int):
         self.name = name
         self.object_id = object_id
         self.parent_id = parent_id
         self.flags = flags
+        self.translations = []   # list of (time_ms, (x, y, z), interp_type)
+        self.rotations = []      # list of (time_ms, (x, y, z, w), interp_type)
+        self.scales = []         # list of (time_ms, (x, y, z), interp_type)
 
 
 class Geoset:
@@ -192,9 +204,75 @@ def _wc3_to_gltf_normal(nrm):
     return (0.0, 1.0, 0.0)
 
 
-def _parse_nodes(chunk_data: bytes) -> list:
-    """Parse a chunk of MDX node entries (BONE, HELP, etc.)."""
-    nodes = []
+def _wc3_quat_to_gltf(quat):
+    """Convert WC3 quaternion to glTF quaternion (axis swap)."""
+    x, y, z, w = quat
+    return (x, z, -y, w)
+
+
+def _parse_track_data(node_data: bytes, track_offset: int, track_tag: str):
+    """Parse MDX keyframe track starting at track_offset in node_data.
+    Format: tag(4) + count(4) + type(4) + global_seq_id(4) + keyframes...
+    Returns (keyframes, track_byte_length).
+    """
+    if track_offset + 16 > len(node_data):
+        return [], 0
+
+    count = int.from_bytes(node_data[track_offset + 4:track_offset + 8], "little")
+    interp_type = int.from_bytes(node_data[track_offset + 8:track_offset + 12], "little")
+    # global_seq_id = int.from_bytes(node_data[track_offset + 12:track_offset + 16], "little", signed=True)
+
+    if track_tag in ("KGTR", "KGSC"):  # translation or scale
+        linear_size = 16   # time(4) + value(3*4)
+        hermite_size = 40  # time + value + in-tangent(3f) + out-tangent(3f)
+    elif track_tag == "KGRT":  # rotation
+        linear_size = 20   # time(4) + value(4*4)
+        hermite_size = 52  # time + value + in-tangent(4f) + out-tangent(4f)
+    else:
+        return [], 0
+
+    if interp_type in (0, 1):  # NONE, LINEAR
+        keyframe_size = linear_size
+    elif interp_type in (2, 3):  # HERMITE, BEZIER
+        keyframe_size = hermite_size
+    else:
+        return [], 0
+
+    data_offset = track_offset + 16
+    expected_end = data_offset + count * keyframe_size
+    if expected_end > len(node_data):
+        return [], 0
+
+    keyframes = []
+    for _ in range(count):
+        time_ms = int.from_bytes(node_data[data_offset:data_offset + 4], "little")
+        if track_tag == "KGTR":
+            x, y, z = struct.unpack("<3f", node_data[data_offset + 4:data_offset + 16])
+            value = _wc3_to_gltf_pos((x, y, z))
+        elif track_tag == "KGRT":
+            x, y, z, w = struct.unpack("<4f", node_data[data_offset + 4:data_offset + 20])
+            value = _wc3_quat_to_gltf((x, y, z, w))
+            # Normalize quaternion
+            mag = math.sqrt(sum(v * v for v in value))
+            if mag > 0:
+                value = tuple(v / mag for v in value)
+        elif track_tag == "KGSC":
+            x, y, z = struct.unpack("<3f", node_data[data_offset + 4:data_offset + 16])
+            value = (x, y, z)
+        else:
+            value = None
+
+        if value is not None:
+            keyframes.append((time_ms, value, interp_type))
+        data_offset += keyframe_size
+
+    track_byte_length = 16 + count * keyframe_size
+    return keyframes, track_byte_length
+
+
+def _parse_bone_nodes(chunk_data: bytes) -> list:
+    """Parse BONE chunk entries including animation tracks."""
+    bones = []
     i = 0
     while i + 96 <= len(chunk_data):
         size = int.from_bytes(chunk_data[i:i + 4], "little")
@@ -207,15 +285,31 @@ def _parse_nodes(chunk_data: bytes) -> list:
         flags = int.from_bytes(chunk_data[i + 92:i + 96], "little")
         # Sanity checks
         if obj_id < 500 and (parent == 0xFFFFFFFF or parent < 500) and flags in (0, 256, 512, 1024, 2048):
-            nodes.append((name, obj_id, parent, flags))
+            bone = Bone(name, obj_id, parent, flags)
+            # Parse track chunks after the 96-byte header
+            track_offset = 96
+            while track_offset + 16 <= size:
+                tag = chunk_data[i + track_offset:i + track_offset + 4].decode("ascii", errors="replace")
+                if tag not in ("KGTR", "KGRT", "KGSC"):
+                    break
+                kfs, track_byte_length = _parse_track_data(chunk_data, i + track_offset, tag)
+                if tag == "KGTR":
+                    bone.translations.extend(kfs)
+                elif tag == "KGRT":
+                    bone.rotations.extend(kfs)
+                elif tag == "KGSC":
+                    bone.scales.extend(kfs)
+                track_offset += track_byte_length
+
+            bones.append(bone)
             i += size
             continue
         i += 4
-    return nodes
+    return bones
 
 
 def parse_mdx(data: bytes) -> dict:
-    """Parse an MDX v800 file and return a dict with textures, materials, geosets, bones, pivots."""
+    """Parse an MDX v800 file and return a dict with textures, materials, geosets, bones, pivots, sequences."""
     if data[:4] != b"MDLX":
         raise ValueError("Not a valid MDX file (missing MDLX magic)")
 
@@ -225,6 +319,7 @@ def parse_mdx(data: bytes) -> dict:
     geosets = []
     bones = []
     pivots = []
+    sequences = []
 
     offset = 4
     while offset < len(data):
@@ -374,13 +469,23 @@ def parse_mdx(data: bytes) -> dict:
                 geos_offset += inclusive_size
 
         elif chunk_id == "BONE":
-            for name, obj_id, parent, flags in _parse_nodes(chunk_data):
-                bones.append(Bone(name, obj_id, parent, flags))
+            bones = _parse_bone_nodes(chunk_data)
 
         elif chunk_id == "PIVT":
             count = len(chunk_data) // 12
             for i in range(count):
                 pivots.append(_read_float3(chunk_data, i * 12))
+
+        elif chunk_id == "SEQS":
+            seq_offset = 0
+            while seq_offset + 132 <= len(chunk_data):
+                name = chunk_data[seq_offset:seq_offset + 80].split(b"\x00")[0].decode("ascii", errors="replace")
+                start_ms = int.from_bytes(chunk_data[seq_offset + 80:seq_offset + 84], "little")
+                end_ms = int.from_bytes(chunk_data[seq_offset + 84:seq_offset + 88], "little")
+                move_speed = struct.unpack("<f", chunk_data[seq_offset + 88:seq_offset + 92])[0]
+                no_loop = int.from_bytes(chunk_data[seq_offset + 92:seq_offset + 96], "little")
+                sequences.append(Sequence(name, start_ms, end_ms, move_speed, loop=(no_loop == 0)))
+                seq_offset += 132
 
         offset = next_offset
 
@@ -391,6 +496,7 @@ def parse_mdx(data: bytes) -> dict:
         "geosets": geosets,
         "bones": bones,
         "pivots": pivots,
+        "sequences": sequences,
     }
 
 
@@ -417,6 +523,7 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     textures = mdx_data["textures"]
     bones = mdx_data.get("bones", [])
     pivots = mdx_data.get("pivots", [])
+    sequences = mdx_data.get("sequences", [])
 
     # Build object_id -> joint_index map for bones
     object_id_to_joint = {}
@@ -715,8 +822,6 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     for val in ibm_data:
         buf2.write(struct.pack("<f", val))
     ibm_length = buf2.tell() - ibm_offset
-    buffer_data = buf2.getvalue()
-    buffer_length = len(buffer_data)
 
     # Add IBM accessor and bufferView
     ibm_accessor_idx = len(accessors)
@@ -731,6 +836,106 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         "byteOffset": ibm_offset,
         "byteLength": ibm_length,
     })
+
+    # Build animations
+    animations = []
+    if sequences and bones:
+        for seq in sequences:
+            samplers = []
+            channels = []
+            for bone_idx, bone in enumerate(bones):
+                for track_list, path_name, vec_size in [
+                    (bone.translations, "translation", 3),
+                    (bone.rotations, "rotation", 4),
+                    (bone.scales, "scale", 3),
+                ]:
+                    # Filter keyframes inside sequence range
+                    kfs = [(t, v, interp) for t, v, interp in track_list if seq.start_ms <= t <= seq.end_ms]
+                    if not kfs:
+                        continue
+
+                    kfs.sort(key=lambda x: x[0])
+
+                    # Rebase times to seconds
+                    times = [(t - seq.start_ms) / 1000.0 for t, v, interp in kfs]
+                    values = [v for t, v, interp in kfs]
+
+                    # Write input accessor
+                    input_offset = buf2.tell()
+                    for t in times:
+                        buf2.write(struct.pack("<f", t))
+                    input_length = buf2.tell() - input_offset
+
+                    input_acc_idx = len(accessors)
+                    accessors.append({
+                        "bufferView": len(buffer_views),
+                        "componentType": 5126,  # FLOAT
+                        "count": len(times),
+                        "type": "SCALAR",
+                        "min": [min(times)],
+                        "max": [max(times)],
+                    })
+                    buffer_views.append({
+                        "buffer": 0,
+                        "byteOffset": input_offset,
+                        "byteLength": input_length,
+                    })
+
+                    # Write output accessor
+                    output_offset = buf2.tell()
+                    if vec_size == 4:
+                        for x, y, z, w in values:
+                            buf2.write(struct.pack("<4f", x, y, z, w))
+                        out_type = "VEC4"
+                    else:
+                        for x, y, z in values:
+                            buf2.write(struct.pack("<3f", x, y, z))
+                        out_type = "VEC3"
+                    output_length = buf2.tell() - output_offset
+
+                    output_acc_idx = len(accessors)
+                    accessors.append({
+                        "bufferView": len(buffer_views),
+                        "componentType": 5126,  # FLOAT
+                        "count": len(values),
+                        "type": out_type,
+                    })
+                    buffer_views.append({
+                        "buffer": 0,
+                        "byteOffset": output_offset,
+                        "byteLength": output_length,
+                    })
+
+                    # Determine interpolation type for glTF
+                    interp_types = {interp for t, v, interp in kfs}
+                    if all(i == 0 for i in interp_types):
+                        gltf_interp = "STEP"
+                    else:
+                        gltf_interp = "LINEAR"
+
+                    sampler_idx = len(samplers)
+                    samplers.append({
+                        "input": input_acc_idx,
+                        "interpolation": gltf_interp,
+                        "output": output_acc_idx,
+                    })
+                    channels.append({
+                        "sampler": sampler_idx,
+                        "target": {
+                            "node": 1 + bone_idx,
+                            "path": path_name,
+                        },
+                    })
+
+            if channels:
+                animations.append({
+                    "name": seq.name,
+                    "channels": channels,
+                    "samplers": samplers,
+                })
+
+    buffer_data = buf2.getvalue()
+    buffer_length = len(buffer_data)
 
     # Build glTF document
     mesh_node = {"mesh": 0}
@@ -762,6 +967,9 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
             "joints": list(range(1, 1 + len(bones))),  # node indices of bone nodes
         }]
 
+    if animations:
+        gltf["animations"] = animations
+
     if gltf_materials:
         gltf["materials"] = gltf_materials
     if gltf_textures:
@@ -790,6 +998,10 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
 
     out_path.write_bytes(glb.getvalue())
     print(f"Wrote {out_path} ({total_length} bytes)")
+    if sequences:
+        print(f"  Sequences: {len(sequences)}, Animations: {len(animations)}")
+        for anim in animations:
+            print(f"    Animation '{anim['name']}': {len(anim['channels'])} channels, {len(anim['samplers'])} samplers")
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -818,7 +1030,8 @@ def main() -> int:
         mdx_parsed = parse_mdx(mdx_bytes)
         print(f"Parsed MDX v{mdx_parsed['version']} with {len(mdx_parsed['geosets'])} geoset(s), "
               f"{len(mdx_parsed['materials'])} material(s), {len(mdx_parsed['textures'])} texture(s), "
-              f"{len(mdx_parsed.get('bones', []))} bone(s), {len(mdx_parsed.get('pivots', []))} pivot(s)")
+              f"{len(mdx_parsed.get('bones', []))} bone(s), {len(mdx_parsed.get('pivots', []))} pivot(s), "
+              f"{len(mdx_parsed.get('sequences', []))} sequence(s)")
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         write_glb(mdx_parsed, out_path, h_mpq=h_mpq)
