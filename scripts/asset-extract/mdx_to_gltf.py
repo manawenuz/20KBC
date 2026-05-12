@@ -271,12 +271,12 @@ def _parse_track_data(node_data: bytes, track_offset: int, track_tag: str):
 
 
 def _parse_geoset_animations(chunk_data: bytes) -> dict:
-    """Parse GEOA entries — returns {geoset_id: first_frame_alpha}.
+    """Parse GEOA entries — returns {geoset_id: {"static": float, "keys": [(ms, alpha), ...]}}
 
-    WC3 'alternate' geosets (like a peasant's carried-lumber prop) get an
-    alpha of 0 here so they stay hidden until a gameplay event triggers
-    them. We use this to skip those geosets from glTF output entirely
-    so they don't appear glued onto the unit at rest.
+    WC3 alt geosets (carried lumber, gold, alt textures) toggle visibility
+    via KGAO alpha tracks. To decide whether to emit a geoset we have to
+    look at the alpha during the Stand sequence — sampling at MDX time 0
+    misclassifies units whose Stand sequence starts well past 0.
     """
     geoset_alpha = {}
     i = 0
@@ -285,37 +285,49 @@ def _parse_geoset_animations(chunk_data: bytes) -> dict:
         if size < 28 or i + size > len(chunk_data):
             break
         static_alpha = struct.unpack("<f", chunk_data[i + 4:i + 8])[0]
-        # flags (4) + static color (12) = 16 bytes, then geoset_id
         geoset_id = int.from_bytes(chunk_data[i + 24:i + 28], "little")
+        keys = []
 
-        # Default to static alpha; KGAO track (if present) overrides.
-        first_alpha = static_alpha
-
-        # Walk any tracks after the fixed header to find KGAO.
         track_off = 28
         while track_off + 16 <= size:
             tag = chunk_data[i + track_off:i + track_off + 4].decode("ascii", errors="replace")
             count = int.from_bytes(chunk_data[i + track_off + 4:i + track_off + 8], "little")
             interp = int.from_bytes(chunk_data[i + track_off + 8:i + track_off + 12], "little")
-            # global_seq_id at +12..+16 (signed int)
             if tag == "KGAO":
-                # Scalar track: per-keyframe = time(4) + alpha(4); hermite adds 8 bytes of tangents.
                 kf_size = 8 if interp in (0, 1) else 16
                 data_off = i + track_off + 16
-                if count > 0 and data_off + kf_size <= len(chunk_data):
-                    first_alpha = struct.unpack("<f", chunk_data[data_off + 4:data_off + 8])[0]
+                for k in range(count):
+                    if data_off + kf_size > len(chunk_data):
+                        break
+                    t_ms = int.from_bytes(chunk_data[data_off:data_off + 4], "little")
+                    a = struct.unpack("<f", chunk_data[data_off + 4:data_off + 8])[0]
+                    keys.append((t_ms, a))
+                    data_off += kf_size
                 track_off += 16 + count * kf_size
-            elif tag in ("KGAC",):
-                # Vec3 track: time(4) + 3f(12); hermite adds 24 bytes.
+            elif tag == "KGAC":
                 kf_size = 16 if interp in (0, 1) else 40
                 track_off += 16 + count * kf_size
             else:
                 break
 
-        geoset_alpha[geoset_id] = first_alpha
+        geoset_alpha[geoset_id] = {"static": static_alpha, "keys": keys}
         i += size
 
     return geoset_alpha
+
+
+def _alpha_in_window(entry: dict, win_start_ms: int, win_end_ms: int) -> float:
+    """Return the max alpha across keyframes inside [win_start_ms, win_end_ms].
+
+    If no keyframes fall in the window, falls back to static_alpha — MDX
+    KGAO tracks are sequence-local in practice, so a keyframe at t=140000
+    (Decay Bone) shouldn't drag a geoset's Stand-time visibility down to 0.
+    """
+    keys = entry.get("keys", [])
+    in_window = [a for t, a in keys if win_start_ms <= t <= win_end_ms]
+    if in_window:
+        return max(in_window)
+    return entry.get("static", 1.0)
 
 
 def _parse_bone_nodes(chunk_data: bytes) -> list:
@@ -592,18 +604,30 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     sequences = mdx_data.get("sequences", [])
     geoset_alpha = mdx_data.get("geoset_alpha", {})
 
-    # Drop alternate geosets that GEOA hides at rest (alpha < 0.5 at frame 0).
-    # WC3 uses these for carried props (peasant's lumber bundle, gold bag),
-    # which should appear only after gameplay events flag them visible.
+    # Find the unit's Stand sequence — its "default visible" state. WC3
+    # KGAO tracks are typically sequence-local in usage even if they span
+    # the whole timeline, so we ask: does this geoset have any keyframe
+    # with alpha>=0.5 inside the Stand window? If yes, keep. If no, fall
+    # back to static_alpha. This correctly keeps wolf body geosets (whose
+    # only KGAO key is at the Decay Bone sequence with alpha=0) while
+    # still dropping peasant's Lumber bundle (which has alpha=0 across
+    # all Stand sequences and only flips on during carry-state events).
+    if sequences:
+        stand = next((s for s in sequences if s.name.lower().startswith("stand")), sequences[0])
+        stand_start, stand_end = stand.start_ms, stand.end_ms
+    else:
+        stand_start, stand_end = 0, 1000
+
     if geoset_alpha:
         kept_geosets = []
         for gidx, g in enumerate(geosets):
-            alpha = geoset_alpha.get(gidx, 1.0)
+            entry = geoset_alpha.get(gidx)
+            if entry is None:
+                kept_geosets.append(g)  # No GEOA = always visible
+                continue
+            alpha = _alpha_in_window(entry, stand_start, stand_end)
             if alpha >= 0.5:
                 kept_geosets.append(g)
-            else:
-                # Skip hidden-by-default geoset.
-                pass
         geosets = kept_geosets
 
     # all_nodes = bones first, then helpers. Bones keep their indices [0..len(bones))

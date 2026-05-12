@@ -242,7 +242,10 @@ def main() -> int:
             # Default mappings when --mdx is used without explicit values
             mappings = args.mdx if args.mdx else [
                 "units/human/peasant/peasant.mdx:peasant.glb",
-                "units/critters/brownwolf/brownwolf.mdx:wolf.glb",
+                # TimberWolf is the hostile creep variant — BrownWolf is a
+                # passive critter and doesn't fit a GAIA threat that hunts
+                # workers.
+                "units/creeps/timberwolf/timberwolf.mdx:wolf.glb",
                 "doodads/terrain/ashentree/ashentree0.mdx:ashentree.glb",
                 "doodads/terrain/rockchunks/rockchunks0.mdx:rockchunks.glb",
             ]
