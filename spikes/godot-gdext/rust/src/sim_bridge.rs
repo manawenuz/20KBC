@@ -26,6 +26,15 @@ impl INode for SimBridge {
         let config = SimConfig::default();
         self.sim = Some(CSimulation::new(config));
         godot_print!("SimBridge: simulation initialized");
+
+        // Bring up the runtime asset registry. Visual nodes (Unit, Gaia,
+        // Building, ResourceNode) try it first; if init fails they fall
+        // back to res://*.glb and then to capsule/box meshes.
+        let mpq_path = std::path::Path::new("/Volumes/samGames/WC3/War3.mpq");
+        match crate::asset_registry::init(mpq_path) {
+            Ok(()) => godot_print!("AssetRegistry: opened {}", mpq_path.display()),
+            Err(e) => godot_warn!("AssetRegistry: init failed ({e}) — falling back to res://*.glb"),
+        }
     }
 
     /// Called by Godot at 20 Hz (physics_ticks_per_second = 20).

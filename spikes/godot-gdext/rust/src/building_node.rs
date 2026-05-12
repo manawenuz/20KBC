@@ -17,6 +17,18 @@ impl INode3D for BuildingNode {
         Self { kind: 0, base }
     }
     fn ready(&mut self) {
+        // Try runtime MDX from MPQ first. Mapping mirrors the visual swap
+        // we applied in extract.py: townhall.glb→AltarOfKings, etc.
+        let mdx_path = match self.kind {
+            1 => "Buildings/Human/AltarOfKings/AltarOfKings.mdx",
+            2 => "Buildings/Human/HumanBarracks/HumanBarracks.mdx",
+            3 => "Buildings/Human/TownHall/TownHall.mdx",
+            _ => "",
+        };
+        if !mdx_path.is_empty() && self.try_spawn_from_registry(mdx_path) {
+            return;
+        }
+
         let path = match self.kind {
             1 => "res://assets/models/townhall.glb",
             2 => "res://assets/models/keep.glb",
@@ -64,5 +76,29 @@ impl INode3D for BuildingNode {
         inst.set_mesh(&mesh);
         inst.set_position(Vector3::new(0.0, 3.0, 0.0));
         self.base_mut().add_child(&inst);
+    }
+}
+
+impl BuildingNode {
+    /// Try to spawn this building's visual from the runtime AssetRegistry.
+    /// Returns true on success.
+    fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
+        use godot::classes::base_material_3d::TextureParam;
+        use godot::classes::Material;
+        let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
+        let Some(r) = resolved else { return false };
+        let mut mi = MeshInstance3D::new_alloc();
+        mi.set_mesh(&r.mesh);
+        for (i, tex) in r.textures.iter().enumerate() {
+            if let Some(t) = tex {
+                let mut mat = StandardMaterial3D::new_gd();
+                mat.set_texture(TextureParam::ALBEDO, t);
+                mat.set_shading_mode(ShadingMode::PER_PIXEL);
+                mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
+            }
+        }
+        mi.set_scale(Vector3::new(0.02, 0.02, 0.02));
+        self.base_mut().add_child(&mi);
+        true
     }
 }

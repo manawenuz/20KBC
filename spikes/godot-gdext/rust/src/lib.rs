@@ -1,5 +1,6 @@
 use godot::prelude::*;
 
+mod asset_registry;
 mod blp;
 mod box_selector;
 mod building_node;

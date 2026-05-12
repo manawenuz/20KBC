@@ -46,6 +46,11 @@ impl INode3D for GaiaNode {
     }
 
     fn ready(&mut self) {
+        // Try runtime MDX from MPQ first (PRDs 30-35 pipeline).
+        if self.try_spawn_from_registry("Units/Creeps/TimberWolf/TimberWolf.mdx") {
+            return;
+        }
+
         let mut loader = ResourceLoader::singleton();
         let model: Option<Gd<PackedScene>> = loader
             .load("res://assets/models/wolf.glb")
@@ -149,5 +154,27 @@ impl GaiaNode {
             Self::resolve_anim(anim, &["Attack - 1", "Attack", "attack"]),
             Self::resolve_anim(anim, &["Walk", "walk", "Run"]),
         ]
+    }
+
+    /// Try to spawn the wolf visual from the runtime AssetRegistry.
+    /// Returns true on success — caller skips the res://*.glb fallback.
+    fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
+        use godot::classes::base_material_3d::TextureParam;
+        use godot::classes::{Material, MeshInstance3D};
+        let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
+        let Some(r) = resolved else { return false };
+        let mut mi = MeshInstance3D::new_alloc();
+        mi.set_mesh(&r.mesh);
+        for (i, tex) in r.textures.iter().enumerate() {
+            if let Some(t) = tex {
+                let mut mat = StandardMaterial3D::new_gd();
+                mat.set_texture(TextureParam::ALBEDO, t);
+                mat.set_shading_mode(ShadingMode::PER_PIXEL);
+                mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
+            }
+        }
+        mi.set_scale(Vector3::new(0.02, 0.02, 0.02));
+        self.base_mut().add_child(&mi);
+        true
     }
 }

@@ -71,6 +71,17 @@ impl INode3D for ResourceNode {
     }
 
     fn ready(&mut self) {
+        // Try runtime MDX from MPQ first.
+        let mdx_path = match self.kind {
+            1 => "Doodads/Terrain/LordaeronTree/LordaeronTree0.mdx",
+            2 => "Doodads/Terrain/RockChunks/RockChunks0.mdx",
+            _ => "",
+        };
+        if !mdx_path.is_empty() && self.try_spawn_from_registry(mdx_path) {
+            self.sim_bridge = self.find_sim_bridge();
+            return;
+        }
+
         // Try to load a GLB model based on kind.
         let model_path = match self.kind {
             1 => "res://assets/models/lordaerontree.glb",
@@ -141,6 +152,30 @@ impl INode3D for ResourceNode {
 }
 
 impl ResourceNode {
+    /// Try to spawn this resource node's visual from the runtime AssetRegistry.
+    /// Returns true on success.
+    fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
+        use godot::classes::base_material_3d::TextureParam;
+        use godot::classes::Material;
+        let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
+        let Some(r) = resolved else { return false };
+        let mut mi = MeshInstance3D::new_alloc();
+        mi.set_mesh(&r.mesh);
+        for (i, tex) in r.textures.iter().enumerate() {
+            if let Some(t) = tex {
+                let mut mat = StandardMaterial3D::new_gd();
+                mat.set_texture(TextureParam::ALBEDO, t);
+                mat.set_shading_mode(ShadingMode::PER_PIXEL);
+                mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
+            }
+        }
+        // WC3 trees + rocks are ~80 MDX units tall like peasants.
+        mi.set_scale(Vector3::new(0.02, 0.02, 0.02));
+        self.base_mut().add_child(&mi);
+        self.mesh = Some(mi.upcast::<Node3D>());
+        true
+    }
+
     /// Build the legacy coloured BoxMesh fallback.
     fn build_fallback_mesh(&mut self) {
         let mut box_mesh = BoxMesh::new_gd();

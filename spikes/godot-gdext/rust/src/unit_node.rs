@@ -83,6 +83,12 @@ impl INode3D for UnitNode {
     }
 
     fn ready(&mut self) {
+        // Try runtime MDX path first (PRDs 30-35 pipeline).
+        if self.try_spawn_from_registry("Units/Human/Peasant/peasant.mdx") {
+            self.build_selection_ring();
+            return;
+        }
+
         let mut loader = ResourceLoader::singleton();
         let model: Option<Gd<PackedScene>> = loader
             .load("res://assets/models/peasant.glb")
@@ -123,23 +129,7 @@ impl INode3D for UnitNode {
             self.spawn_capsule();
         }
 
-        // Build green selection ring (torus) at feet.
-        let mut torus = TorusMesh::new_gd();
-        torus.set_inner_radius(0.6);
-        torus.set_outer_radius(0.75);
-
-        let mut ring_mat = StandardMaterial3D::new_gd();
-        ring_mat.set_albedo(COLOR_RING);
-        ring_mat.set_shading_mode(ShadingMode::PER_PIXEL);
-        torus.surface_set_material(0, &ring_mat);
-
-        let mut ring_inst = MeshInstance3D::new_alloc();
-        ring_inst.set_mesh(&torus);
-        ring_inst.set_position(Vector3::new(0.0, 0.05, 0.0));
-        ring_inst.set_visible(false);
-
-        self.base_mut().add_child(&ring_inst);
-        self.ring = Some(ring_inst);
+        self.build_selection_ring();
     }
 
     fn process(&mut self, delta: f64) {
@@ -351,5 +341,49 @@ impl UnitNode {
         grandparent
             .get_node_or_null("SimBridge")
             .and_then(|n| n.try_cast::<crate::sim_bridge::SimBridge>().ok())
+    }
+
+    /// Try to spawn this unit's visual from the runtime AssetRegistry
+    /// (PRDs 30-35 pipeline). Returns true on success — caller should
+    /// skip the res://*.glb fallback. Returns false if the registry
+    /// isn't initialised or the MDX isn't in the MPQ.
+    fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
+        use godot::classes::base_material_3d::TextureParam;
+        let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
+        let Some(r) = resolved else { return false };
+        let mut mi = MeshInstance3D::new_alloc();
+        mi.set_mesh(&r.mesh);
+        for (i, tex) in r.textures.iter().enumerate() {
+            if let Some(t) = tex {
+                let mut mat = StandardMaterial3D::new_gd();
+                mat.set_texture(TextureParam::ALBEDO, t);
+                mat.set_shading_mode(ShadingMode::PER_PIXEL);
+                mi.set_surface_override_material(i as i32, &mat.upcast::<godot::classes::Material>());
+            }
+        }
+        mi.set_scale(Vector3::new(0.02, 0.02, 0.02));
+        self.base_mut().add_child(&mi);
+        self.mesh = Some(mi);
+        true
+    }
+
+    /// Build the green selection ring (torus) at the unit's feet.
+    fn build_selection_ring(&mut self) {
+        let mut torus = TorusMesh::new_gd();
+        torus.set_inner_radius(0.6);
+        torus.set_outer_radius(0.75);
+
+        let mut ring_mat = StandardMaterial3D::new_gd();
+        ring_mat.set_albedo(COLOR_RING);
+        ring_mat.set_shading_mode(ShadingMode::PER_PIXEL);
+        torus.surface_set_material(0, &ring_mat);
+
+        let mut ring_inst = MeshInstance3D::new_alloc();
+        ring_inst.set_mesh(&torus);
+        ring_inst.set_position(Vector3::new(0.0, 0.05, 0.0));
+        ring_inst.set_visible(false);
+
+        self.base_mut().add_child(&ring_inst);
+        self.ring = Some(ring_inst);
     }
 }
