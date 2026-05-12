@@ -32,11 +32,35 @@ pub struct Sequence {
 }
 
 #[derive(Debug, Clone)]
+pub struct TranslationKf {
+    pub time_ms: u32,
+    pub value: [f32; 3],
+    pub interpolation: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotationKf {
+    pub time_ms: u32,
+    pub value: [f32; 4],
+    pub interpolation: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScaleKf {
+    pub time_ms: u32,
+    pub value: [f32; 3],
+    pub interpolation: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct Bone {
     pub name: String,
     pub object_id: u32,
     pub parent_id: u32,
     pub flags: u32,
+    pub translations: Vec<TranslationKf>,
+    pub rotations: Vec<RotationKf>,
+    pub scales: Vec<ScaleKf>,
 }
 
 #[derive(Debug, Clone)]

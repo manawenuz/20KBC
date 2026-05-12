@@ -4,6 +4,9 @@ use godot::classes::mesh::PrimitiveType;
 
 use super::types::*;
 
+pub use super::skin::{build_skeleton, build_skin};
+pub use super::animation::build_animation_library;
+
 pub struct BuiltMesh {
     pub mesh: Gd<ArrayMesh>,
     pub surface_textures: Vec<Option<String>>,

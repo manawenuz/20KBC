@@ -315,12 +315,78 @@ fn parse_bone_nodes(chunk_data: &[u8]) -> Result<Vec<Bone>, String> {
         let obj_id = u32::from_le_bytes(chunk_data[i + 84..i + 88].try_into().unwrap());
         let parent = u32::from_le_bytes(chunk_data[i + 88..i + 92].try_into().unwrap());
         let flags = u32::from_le_bytes(chunk_data[i + 92..i + 96].try_into().unwrap());
+        let mut translations = Vec::new();
+        let mut rotations = Vec::new();
+        let mut scales = Vec::new();
+
+        let mut track_off = 96usize;
+        while track_off + 16 <= size {
+            let tag = std::str::from_utf8(&chunk_data[i + track_off..i + track_off + 4]).unwrap_or("");
+            let count = u32::from_le_bytes(chunk_data[i + track_off + 4..i + track_off + 8].try_into().unwrap()) as usize;
+            let interp = u32::from_le_bytes(chunk_data[i + track_off + 8..i + track_off + 12].try_into().unwrap());
+            // Skip global sequence id
+            let data_start = i + track_off + 16;
+            match tag {
+                "KGTR" => {
+                    let kf_size = if interp <= 1 { 16 } else { 40 };
+                    let mut data_off = data_start;
+                    for _ in 0..count {
+                        if data_off + kf_size > chunk_data.len() {
+                            break;
+                        }
+                        let t_ms = u32::from_le_bytes(chunk_data[data_off..data_off + 4].try_into().unwrap());
+                        let value = read_float3(chunk_data, data_off + 4);
+                        translations.push(TranslationKf { time_ms: t_ms, value, interpolation: interp });
+                        data_off += kf_size;
+                    }
+                    track_off += 16 + count * kf_size;
+                }
+                "KGRT" => {
+                    let kf_size = if interp <= 1 { 20 } else { 52 };
+                    let mut data_off = data_start;
+                    for _ in 0..count {
+                        if data_off + kf_size > chunk_data.len() {
+                            break;
+                        }
+                        let t_ms = u32::from_le_bytes(chunk_data[data_off..data_off + 4].try_into().unwrap());
+                        let value = [
+                            f32::from_le_bytes(chunk_data[data_off + 4..data_off + 8].try_into().unwrap()),
+                            f32::from_le_bytes(chunk_data[data_off + 8..data_off + 12].try_into().unwrap()),
+                            f32::from_le_bytes(chunk_data[data_off + 12..data_off + 16].try_into().unwrap()),
+                            f32::from_le_bytes(chunk_data[data_off + 16..data_off + 20].try_into().unwrap()),
+                        ];
+                        rotations.push(RotationKf { time_ms: t_ms, value, interpolation: interp });
+                        data_off += kf_size;
+                    }
+                    track_off += 16 + count * kf_size;
+                }
+                "KGSC" => {
+                    let kf_size = if interp <= 1 { 16 } else { 40 };
+                    let mut data_off = data_start;
+                    for _ in 0..count {
+                        if data_off + kf_size > chunk_data.len() {
+                            break;
+                        }
+                        let t_ms = u32::from_le_bytes(chunk_data[data_off..data_off + 4].try_into().unwrap());
+                        let value = read_float3(chunk_data, data_off + 4);
+                        scales.push(ScaleKf { time_ms: t_ms, value, interpolation: interp });
+                        data_off += kf_size;
+                    }
+                    track_off += 16 + count * kf_size;
+                }
+                _ => break,
+            }
+        }
+
         if obj_id < 500 && (parent == 0xFFFFFFFF || parent < 500) {
             bones.push(Bone {
                 name,
                 object_id: obj_id,
                 parent_id: parent,
                 flags,
+                translations,
+                rotations,
+                scales,
             });
             i += size;
             continue;
