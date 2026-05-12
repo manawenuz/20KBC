@@ -49,7 +49,7 @@ impl INode for MdxInstance {
         let t = start + self.elapsed_ms as u32;
         for (surf_idx, &geoset_idx) in self.surface_to_geoset.iter().enumerate() {
             let alpha = match model.geoset_alpha.get(geoset_idx).and_then(|o| o.as_ref()) {
-                Some(entry) => sample_alpha_at(entry, t),
+                Some(entry) => sample_alpha_at(entry, t, start, end),
                 None => 1.0,
             };
             if let Some(mat) = self.materials.get_mut(surf_idx) {

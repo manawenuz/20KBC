@@ -6,20 +6,33 @@ pub mod types;
 
 use types::GeosetAlpha;
 
-/// Sample a GEOA alpha curve at `t_ms`. Linear interp between bracketing
-/// keys; clamps at curve ends; falls back to `static_alpha` only when
-/// the curve has no keys at all. Matches Warsmash's runtime behavior.
-pub fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32) -> f32 {
-    if entry.keys.is_empty() {
+/// Sample a GEOA alpha curve at `t_ms`, restricted to the active
+/// sequence window `[seq_start, seq_end]`. Matches WC3 / Warsmash
+/// runtime semantics: each sequence is independent, so keys outside
+/// the active window must NOT influence the value (otherwise a Stand
+/// Work key at alpha=0 would bleed into the Stand sequence and fade
+/// the arm geoset out for half the cycle).
+///
+/// - No keys in the window → `static_alpha` (the default-visibility flag).
+/// - One or more keys in the window → interpolate; clamp at window
+///   edges to the nearest in-window key.
+pub fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32, seq_start: u32, seq_end: u32) -> f32 {
+    let mut in_win: Vec<&(u32, f32)> = entry
+        .keys
+        .iter()
+        .filter(|(t, _)| *t >= seq_start && *t <= seq_end)
+        .collect();
+    if in_win.is_empty() {
         return entry.static_alpha;
     }
+    in_win.sort_by_key(|(t, _)| *t);
     let (mut prev, mut next): (Option<&(u32, f32)>, Option<&(u32, f32)>) = (None, None);
-    for k in &entry.keys {
+    for k in &in_win {
         if k.0 <= t_ms {
-            prev = Some(k);
+            prev = Some(*k);
         }
         if k.0 >= t_ms && next.is_none() {
-            next = Some(k);
+            next = Some(*k);
         }
     }
     match (prev, next) {
