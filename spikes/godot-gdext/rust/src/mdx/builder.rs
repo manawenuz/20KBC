@@ -38,16 +38,31 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
         .iter()
         .enumerate()
         .filter(|(gidx, _)| {
-            if let Some(ref stand_seq) = stand {
-                if let Some(Some(ref entry)) = model.geoset_alpha.get(*gidx) {
-                    let alpha = alpha_in_window(entry, stand_seq.start_ms, stand_seq.end_ms);
+            let keep = match (stand.as_ref(), model.geoset_alpha.get(*gidx)) {
+                (Some(stand_seq), Some(Some(entry))) => {
+                    // Some peasant geosets have NO alpha keys within the
+                    // Stand window — those should fall back to static_alpha
+                    // (the default-visibility flag) instead of being treated
+                    // as alpha=0. Without this fallback, the arm geoset (its
+                    // keys mostly live in Stand Ready / Stand Work) gets
+                    // dropped from the basic Stand build.
+                    let in_window_max = entry
+                        .keys
+                        .iter()
+                        .filter(|(t, _)| *t >= stand_seq.start_ms && *t <= stand_seq.end_ms)
+                        .map(|(_, a)| *a)
+                        .fold(f32::NEG_INFINITY, f32::max);
+                    let alpha = if in_window_max > f32::NEG_INFINITY {
+                        in_window_max.max(entry.static_alpha)
+                    } else {
+                        entry.static_alpha
+                    };
                     alpha >= 0.5
-                } else {
-                    true
                 }
-            } else {
-                true
-            }
+                _ => true,
+            };
+            godot_print!("MDX geoset {} kept={}", gidx, keep);
+            keep
         })
         .collect();
 
