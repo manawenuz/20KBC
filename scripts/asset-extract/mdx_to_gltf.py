@@ -8,10 +8,17 @@ import argparse
 import ctypes
 import json
 import math
+import os
 import struct
 import sys
 from io import BytesIO
 from pathlib import Path
+
+try:
+    from PIL import Image
+    _HAS_PILLOW = True
+except ImportError:
+    _HAS_PILLOW = False
 
 # ---------------------------------------------------------------------------
 # StormLib bindings (shared with extract.py)
@@ -340,7 +347,15 @@ def _pad4(n: int) -> int:
     return (n + 3) & ~3
 
 
-def write_glb(mdx_data: dict, out_path: Path, texture_base_path: str = "") -> None:
+def _blp_to_png(blp_data: bytes) -> bytes:
+    """Convert BLP bytes to PNG bytes using Pillow's BLP plugin."""
+    img = Image.open(BytesIO(blp_data))
+    out = BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     """Write a static-mesh glTF 2.0 binary file from parsed MDX data."""
     geosets = mdx_data["geosets"]
     materials = mdx_data["materials"]
@@ -453,9 +468,14 @@ def write_glb(mdx_data: dict, out_path: Path, texture_base_path: str = "") -> No
     gltf_textures = []
     gltf_images = []
     texture_index_map = {}  # MDX texture_id -> glTF texture index
+    textures_out_dir = out_path.parent / "textures"
 
     for mat_idx, mat in enumerate(materials):
-        pbr = {"baseColorFactor": [1.0, 1.0, 1.0, 1.0]}
+        pbr = {
+            "baseColorFactor": [1.0, 1.0, 1.0, 1.0],
+            "metallicFactor": 0.0,
+            "roughnessFactor": 0.9,
+        }
         material_def = {"pbrMetallicRoughness": pbr, "doubleSided": True}
 
         if mat.layers:
@@ -466,10 +486,25 @@ def write_glb(mdx_data: dict, out_path: Path, texture_base_path: str = "") -> No
                 if tex.file_name and tex.replaceable_id == 0:
                     if tex_id not in texture_index_map:
                         texture_index_map[tex_id] = len(gltf_textures)
-                        # Convert .blp to .png for the reference
-                        image_name = tex.file_name.replace("\\", "/").replace(".blp", ".png")
-                        gltf_images.append({"uri": image_name})
-                        gltf_textures.append({"source": len(gltf_images) - 1})
+                        # Derive PNG filename from BLP path
+                        base_name = os.path.basename(tex.file_name.replace("\\", "/")).replace(".blp", ".png")
+                        image_uri = f"textures/{base_name}"
+                        gltf_images.append({"uri": image_uri})
+                        gltf_textures.append({"source": len(gltf_images) - 1, "sampler": 0})
+
+                        # Extract BLP -> PNG if MPQ handle is available
+                        if h_mpq is not None and _HAS_PILLOW:
+                            mpq_tex_path = tex.file_name.replace("/", "\\")
+                            try:
+                                blp_data = _read_mpq_file(h_mpq, mpq_tex_path)
+                                png_data = _blp_to_png(blp_data)
+                                textures_out_dir.mkdir(parents=True, exist_ok=True)
+                                png_path = textures_out_dir / base_name
+                                png_path.write_bytes(png_data)
+                                print(f"  Extracted texture: {mpq_tex_path} -> {png_path}")
+                            except Exception as exc:
+                                print(f"  WARNING: Failed to extract texture {mpq_tex_path}: {exc}", file=sys.stderr)
+
                     material_def["pbrMetallicRoughness"]["baseColorTexture"] = {
                         "index": texture_index_map[tex_id],
                         "texCoord": 0,
@@ -553,6 +588,8 @@ def write_glb(mdx_data: dict, out_path: Path, texture_base_path: str = "") -> No
         gltf["textures"] = gltf_textures
     if gltf_images:
         gltf["images"] = gltf_images
+    if gltf_textures:
+        gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987}]
 
     json_bytes = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
     json_length = _pad4(len(json_bytes))

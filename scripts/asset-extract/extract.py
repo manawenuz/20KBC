@@ -207,13 +207,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--mdx",
-        nargs="+",
+        nargs="*",
         required=False,
-        help='MDX file mappings in the form "mpq/path.mdx:output.glb"',
+        help='MDX file mappings in the form "mpq/path.mdx:output.glb". If given without values, extracts default models.',
     )
     args = parser.parse_args()
 
-    if not args.files and not args.mdx:
+    if not args.files and args.mdx is None:
         parser.error("One of --files or --mdx is required.")
 
     mpq_path = Path(args.mpq)
@@ -231,25 +231,37 @@ def main() -> int:
 
     extracted = []
     try:
-        if args.mdx:
+        if args.mdx is not None:
             # Lazy import to avoid hard dependency on mdx_to_gltf
             try:
                 from mdx_to_gltf import parse_mdx, write_glb
             except ImportError:
                 print("ERROR: mdx_to_gltf module not found.", file=sys.stderr)
                 return 1
-            for mapping in args.mdx:
+
+            # Default mappings when --mdx is used without explicit values
+            mappings = args.mdx if args.mdx else [
+                "units/human/peasant/peasant.mdx:peasant.glb",
+                "units/critters/brownwolf/brownwolf.mdx:wolf.glb",
+                "doodads/terrain/ashentree/ashentree0.mdx:ashentree.glb",
+                "doodads/terrain/rockchunks/rockchunks0.mdx:rockchunks.glb",
+            ]
+
+            for mapping in mappings:
                 if ":" not in mapping:
                     print(f"ERROR: Invalid MDX mapping (missing colon): {mapping}", file=sys.stderr)
-                    return 1
+                    continue
                 src, dst_name = mapping.split(":", 1)
                 mpq_internal = _normalize_path(src)
                 dst_path = out_dir / dst_name
-                mdx_bytes = _read_mpq_file(h_mpq, mpq_internal)
-                mdx_parsed = parse_mdx(mdx_bytes)
-                write_glb(mdx_parsed, dst_path)
-                extracted.append((mpq_internal.replace("\\", "/"), dst_name, dst_path.stat().st_size))
-                print(f"  {mpq_internal.replace('\\', '/')} -> {dst_name} ({dst_path.stat().st_size} bytes)")
+                try:
+                    mdx_bytes = _read_mpq_file(h_mpq, mpq_internal)
+                    mdx_parsed = parse_mdx(mdx_bytes)
+                    write_glb(mdx_parsed, dst_path, h_mpq=h_mpq)
+                    extracted.append((mpq_internal.replace("\\", "/"), dst_name, dst_path.stat().st_size))
+                    print(f"  {mpq_internal.replace('\\', '/')} -> {dst_name} ({dst_path.stat().st_size} bytes)")
+                except Exception as exc:
+                    print(f"  WARNING: Failed to extract {mpq_internal}: {exc}", file=sys.stderr)
 
         for mapping in (args.files or []):
             if ":" not in mapping:
