@@ -69,9 +69,10 @@ impl ICamera3D for RtsCameraController {
         }
 
         if pan != Vector3::ZERO {
+            let pan_speed = self.pan_speed;
             let current = self.base().get_position();
             self.base_mut()
-                .set_position(current + pan.normalized() * self.pan_speed * delta);
+                .set_position(current + pan.normalized() * pan_speed * delta);
         }
     }
 

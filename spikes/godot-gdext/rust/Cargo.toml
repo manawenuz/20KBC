@@ -8,4 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
-game-core = { path = "../../game-core" }
+game-core = { path = "../../../game-core" }

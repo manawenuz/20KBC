@@ -87,14 +87,15 @@ impl TerrainNode {
 
         // Build the surface array. Godot expects exactly Mesh::ARRAY_MAX (13) slots.
         // Unfilled slots must be Nil variants (VariantArray default).
-        let mut arrays = VariantArray::new();
-        arrays.resize(13);
+        // gdext 0.5.2: resize requires a fill value; set requires &Variant.
+        let mut arrays = VarArray::new();
+        arrays.resize(13, &Variant::nil());
         // Slot 0 = ARRAY_VERTEX
-        arrays.set(0, positions.to_variant());
+        arrays.set(0, &positions.to_variant());
         // Slot 1 = ARRAY_NORMAL
-        arrays.set(1, normals.to_variant());
+        arrays.set(1, &normals.to_variant());
         // Slot 3 = ARRAY_COLOR
-        arrays.set(3, colors.to_variant());
+        arrays.set(3, &colors.to_variant());
 
         let mut mesh = ArrayMesh::new_gd();
         mesh.add_surface_from_arrays(PrimitiveType::TRIANGLES, &arrays);

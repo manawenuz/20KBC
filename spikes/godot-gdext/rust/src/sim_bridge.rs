@@ -52,7 +52,7 @@ impl SimBridge {
             sim.issue_order(
                 unit_id,
                 Order::Move {
-                    target: glam::Vec2::new(x, z),
+                    target: game_core::Vec2::new(x, z),
                 },
             );
         }

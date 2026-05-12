@@ -1,19 +1,15 @@
-[gd_scene load_steps=3 format=3 uid="uid://bc20k_main"]
+[gd_scene load_steps=2 format=3 uid="uid://bc20k_main"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
-[node name="SimBridge" type="Node" parent="."]
-script = "SimBridge"
+[node name="SimBridge" type="SimBridge" parent="."]
 
-[node name="TerrainNode" type="MeshInstance3D" parent="."]
-script = "TerrainNode"
+[node name="TerrainNode" type="TerrainNode" parent="."]
 
-[node name="RtsCameraController" type="Camera3D" parent="."]
-script = "RtsCameraController"
-current = true
+[node name="RtsCameraController" type="RtsCameraController" parent="."]
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.353, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 60, 0)
@@ -22,8 +18,7 @@ shadow_enabled = true
 
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
-[node name="GameHud" type="Control" parent="CanvasLayer"]
-script = "GameHud"
+[node name="GameHud" type="GameHud" parent="CanvasLayer"]
 anchor_right = 1.0
 anchor_bottom = 1.0
 

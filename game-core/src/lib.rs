@@ -9,6 +9,9 @@ pub mod simulation;
 pub mod supply;
 pub mod unit;
 
+// Re-export glam math types so dependents don't need a separate glam dep.
+pub use glam::Vec2;
+
 // Re-export the public surface the spec requires.
 pub use config::SimConfig;
 pub use gaia::CGaiaEntity;

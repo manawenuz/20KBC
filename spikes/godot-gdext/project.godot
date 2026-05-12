@@ -3,9 +3,7 @@
 ; but this file is kept human-readable for version control.
 
 [configuration]
-entry_symbol = "gdext_rust_init"
-compatibility_minimum = "4.3"
-config_version = 4
+config_version = 5
 
 [application]
 
