@@ -196,16 +196,25 @@ def _pick_fallback(candidates: list, keyword: str) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Extract BLP textures from a WC3 MPQ and convert to PNG.")
+    parser = argparse.ArgumentParser(description="Extract BLP textures or MDX models from a WC3 MPQ.")
     parser.add_argument("--mpq", required=True, help="Path to the MPQ archive.")
-    parser.add_argument("--out", required=True, help="Output directory for PNG files.")
+    parser.add_argument("--out", required=True, help="Output directory for PNG/GLB files.")
     parser.add_argument(
         "--files",
         nargs="+",
-        required=True,
+        required=False,
         help='File mappings in the form "mpq/path.blp:output.png"',
     )
+    parser.add_argument(
+        "--mdx",
+        nargs="+",
+        required=False,
+        help='MDX file mappings in the form "mpq/path.mdx:output.glb"',
+    )
     args = parser.parse_args()
+
+    if not args.files and not args.mdx:
+        parser.error("One of --files or --mdx is required.")
 
     mpq_path = Path(args.mpq)
     if not mpq_path.exists():
@@ -222,7 +231,27 @@ def main() -> int:
 
     extracted = []
     try:
-        for mapping in args.files:
+        if args.mdx:
+            # Lazy import to avoid hard dependency on mdx_to_gltf
+            try:
+                from mdx_to_gltf import parse_mdx, write_glb
+            except ImportError:
+                print("ERROR: mdx_to_gltf module not found.", file=sys.stderr)
+                return 1
+            for mapping in args.mdx:
+                if ":" not in mapping:
+                    print(f"ERROR: Invalid MDX mapping (missing colon): {mapping}", file=sys.stderr)
+                    return 1
+                src, dst_name = mapping.split(":", 1)
+                mpq_internal = _normalize_path(src)
+                dst_path = out_dir / dst_name
+                mdx_bytes = _read_mpq_file(h_mpq, mpq_internal)
+                mdx_parsed = parse_mdx(mdx_bytes)
+                write_glb(mdx_parsed, dst_path)
+                extracted.append((mpq_internal.replace("\\", "/"), dst_name, dst_path.stat().st_size))
+                print(f"  {mpq_internal.replace('\\', '/')} -> {dst_name} ({dst_path.stat().st_size} bytes)")
+
+        for mapping in (args.files or []):
             if ":" not in mapping:
                 print(f"ERROR: Invalid mapping (missing colon): {mapping}", file=sys.stderr)
                 return 1
