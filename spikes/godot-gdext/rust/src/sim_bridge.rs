@@ -243,4 +243,29 @@ impl SimBridge {
             }
         }
     }
+
+    /// Issue an attack order to the given unit.
+    #[func]
+    pub fn issue_attack_order(&mut self, attacker: u32, target: u32) {
+        if let Some(sim) = &mut self.sim {
+            sim.issue_order(attacker, game_core::Order::Attack { target });
+        }
+    }
+
+    /// Returns the UnitId of the closest living hostile unit within `radius` of (world_x, world_z).
+    /// Hostile means `owner != player`. Returns -1 if no hostile unit is within range.
+    #[func]
+    pub fn get_hostile_at(&self, world_x: f32, world_z: f32, player: u8, radius: f32) -> i64 {
+        let pos = game_core::Vec2::new(world_x, world_z);
+        let r2 = radius * radius;
+        self.sim.as_ref().and_then(|s| {
+            s.iter_units()
+                .filter(|u| !u.is_dead && u.owner != player)
+                .filter(|u| u.pos.distance_squared(pos) <= r2)
+                .min_by(|a, b| a.pos.distance_squared(pos)
+                    .partial_cmp(&b.pos.distance_squared(pos))
+                    .unwrap_or(std::cmp::Ordering::Equal))
+                .map(|u| u.id as i64)
+        }).unwrap_or(-1)
+    }
 }
