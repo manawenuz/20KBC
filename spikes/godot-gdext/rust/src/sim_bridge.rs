@@ -198,4 +198,14 @@ impl SimBridge {
             })
             .unwrap_or(-1)
     }
+
+    /// Serialize the input log to `path`. Called from main.gd on quit so
+    /// every match leaves a replay.bin alongside the executable.
+    #[func]
+    pub fn save_replay(&self, path: GString) {
+        if let Some(sim) = &self.sim {
+            let p = path.to_string();
+            sim.write_replay(&p);
+        }
+    }
 }
