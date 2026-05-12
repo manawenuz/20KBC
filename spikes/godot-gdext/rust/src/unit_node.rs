@@ -53,6 +53,7 @@ pub struct UnitNode {
     dying: bool,
     death_elapsed: f32,
     anim_player: Option<Gd<AnimationPlayer>>,
+    mdx_instance: Option<Gd<crate::mdx_instance::MdxInstance>>,
     prev_behavior: i64,
     behavior_poll: u32,
     anim_map: [Option<String>; 4],
@@ -74,6 +75,7 @@ impl INode3D for UnitNode {
             dying: false,
             death_elapsed: 0.0,
             anim_player: None,
+            mdx_instance: None,
             prev_behavior: -1,
             behavior_poll: 0,
             anim_map: [None, None, None, None],
@@ -173,6 +175,9 @@ impl INode3D for UnitNode {
                     if idx < self.anim_map.len() {
                         if let Some(ref name) = self.anim_map[idx] {
                             anim.play_ex().name(name.as_str()).done();
+                            if let Some(ref mut mi) = self.mdx_instance {
+                                mi.bind_mut().set_sequence(GString::from(name.as_str()));
+                            }
                         }
                     }
                 }
@@ -352,7 +357,7 @@ impl UnitNode {
     ///     ├── MeshInstance3D (skeleton_path = ../Skeleton3D, skin = built skin)
     ///     └── AnimationPlayer
     fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
-        use godot::classes::base_material_3d::TextureParam;
+        use godot::classes::base_material_3d::{TextureParam, Transparency};
         use godot::classes::{AnimationPlayer, Material};
         let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
         let Some(r) = resolved else { return false };
@@ -362,8 +367,6 @@ impl UnitNode {
 
         let has_skeleton = r.skeleton.is_some() && r.skin.is_some();
         if let Some(proto) = r.skeleton.clone() {
-            // Skeleton3D is a NODE not a Resource — every spawn needs its
-            // own duplicate so we don't reparent the prototype.
             if let Some(dup) = proto.duplicate() {
                 if let Ok(mut sk) = dup.try_cast::<godot::classes::Skeleton3D>() {
                     sk.set_name("Skeleton3D");
@@ -374,12 +377,17 @@ impl UnitNode {
 
         let mut mi = MeshInstance3D::new_alloc();
         mi.set_mesh(&r.mesh);
-        // Skin-tone fallback so surfaces without a resolved BLP don't render
-        // pure-white (which reads as "no texture" in screenshots).
+        // Build per-instance materials so MdxInstance can mutate alpha
+        // without bleeding across other spawns of the same model.
         let skin_tone = Color { r: 0.78, g: 0.62, b: 0.45, a: 1.0 };
+        let mut materials: Vec<Gd<StandardMaterial3D>> = Vec::with_capacity(r.textures.len());
         for (i, tex) in r.textures.iter().enumerate() {
             let mut mat = StandardMaterial3D::new_gd();
             mat.set_shading_mode(ShadingMode::PER_PIXEL);
+            // Per-frame alpha sampling drives geoset visibility. Use
+            // ALPHA transparency mode (not scissor) so fades are smooth
+            // and there's no halo around fading geosets.
+            mat.set_transparency(Transparency::ALPHA);
             match tex {
                 Some(t) => { mat.set_texture(TextureParam::ALBEDO, t); }
                 None => {
@@ -387,7 +395,8 @@ impl UnitNode {
                     godot_print!("UnitNode {mdx_path}: surface {i} has no texture (fallback)");
                 }
             }
-            mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
+            mi.set_surface_override_material(i as i32, &mat.clone().upcast::<Material>());
+            materials.push(mat);
         }
         visual.add_child(&mi);
         if has_skeleton {
@@ -397,26 +406,42 @@ impl UnitNode {
             }
         }
 
+        // Mount the per-frame alpha sampler. Configure with the parsed
+        // model + surface→geoset map so it can drive material albedo.a
+        // each frame from the active sequence's GEOA curves.
+        let mut mdx_inst: Gd<crate::mdx_instance::MdxInstance> =
+            Gd::from_init_fn(|base| crate::mdx_instance::MdxInstance::init(base));
+        mdx_inst.set_name("MdxInstance");
+        mdx_inst
+            .bind_mut()
+            .configure(r.model.clone(), r.geoset_indices.clone(), materials);
+        visual.add_child(&mdx_inst);
+
+        let mut initial_seq: Option<String> = None;
         if let Some(lib) = r.animations.clone() {
             let mut anim = AnimationPlayer::new_alloc();
             anim.add_animation_library(&StringName::default(), &lib);
             visual.add_child(&anim);
             Self::set_loop_modes(&mut anim);
-            // Idle by default — the behavior poll in process() flips to
-            // Walk/Attack when the sim actually moves/fights the unit.
             self.anim_map = Self::build_anim_map(&anim);
             if let Some(ref idle) = self.anim_map[0] {
                 anim.play_ex().name(idle.as_str()).done();
+                initial_seq = Some(idle.clone());
             } else {
                 for name in ["Stand", "Stand Ready", "Walk", "Birth"] {
                     if anim.has_animation(name) {
                         anim.play_ex().name(name).done();
+                        initial_seq = Some(name.to_string());
                         break;
                     }
                 }
             }
             self.anim_player = Some(anim);
         }
+        if let Some(name) = initial_seq {
+            mdx_inst.bind_mut().set_sequence(GString::from(name.as_str()));
+        }
+        self.mdx_instance = Some(mdx_inst);
 
         self.base_mut().add_child(&visual);
         self.mesh = Some(mi);

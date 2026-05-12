@@ -10,6 +10,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 
 use godot::classes::image::Format;
 use godot::classes::{AnimationLibrary, Image, ImageTexture, Skeleton3D, Skin, Texture2D};
@@ -19,6 +20,7 @@ use crate::blp::decode_blp;
 use crate::datasource::{DataSource, MpqDataSource};
 use crate::mdx::builder::{build_animation_library, build_mesh, build_skeleton, build_skin};
 use crate::mdx::parser::parse_mdx;
+use crate::mdx::types::MdxModel;
 
 /// Cached, ready-to-mount model. `skeleton`, `skin`, and `animations`
 /// are populated only when the MDX had any bones — pure prop meshes
@@ -32,6 +34,12 @@ pub struct ResolvedModel {
     pub skeleton: Option<Gd<Skeleton3D>>,
     pub skin: Option<Gd<Skin>>,
     pub animations: Option<Gd<AnimationLibrary>>,
+    /// `surface_index → geoset_index`. Per-frame alpha sampler uses this.
+    pub geoset_indices: Vec<usize>,
+    /// Shared parsed model — gives the per-frame sampler access to
+    /// GEOA curves and the sequence table. Rc (not Arc) because Gd<T>
+    /// fields make ResolvedModel !Send anyway.
+    pub model: Rc<MdxModel>,
 }
 
 pub struct AssetRegistry {
@@ -81,18 +89,19 @@ impl AssetRegistry {
         } else {
             let sk = build_skeleton(&model);
             let sn = build_skin(&model, &sk);
-            // Animation tracks target "Skeleton3D:BoneName" — that path
-            // matches the Skeleton3D child node we mount under UnitNode.
             let lib = build_animation_library(&model, NodePath::from("Skeleton3D"));
             (Some(sk), Some(sn), Some(lib))
         };
 
+        let geoset_indices = built.geoset_indices;
         let resolved = ResolvedModel {
             mesh: built.mesh,
             textures,
             skeleton,
             skin,
             animations,
+            geoset_indices,
+            model: Rc::new(model),
         };
         self.mdx_cache
             .insert(mdx_path.to_string(), resolved.clone());

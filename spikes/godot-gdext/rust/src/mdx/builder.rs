@@ -12,6 +12,9 @@ pub use super::animation::build_animation_library;
 pub struct BuiltMesh {
     pub mesh: Gd<ArrayMesh>,
     pub surface_textures: Vec<Option<String>>,
+    /// `surface_index → geoset_index` in the original `MdxModel`. Lets
+    /// per-frame samplers look up the right GEOA curve.
+    pub geoset_indices: Vec<usize>,
 }
 
 /// Build an object_id → skeleton-bone-index map matching the layout used
@@ -26,39 +29,16 @@ fn object_id_to_bone_idx(model: &MdxModel) -> HashMap<u32, i32> {
 }
 
 pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
-    // GEOA Stand-window filter
-    let stand = model
-        .sequences
-        .iter()
-        .find(|s| s.name.to_lowercase().starts_with("stand"))
-        .or_else(|| model.sequences.first());
-
-    // Build-time filter: keep geosets whose GEOA alpha is >= 0.5 at the
-    // mid-point of the Stand sequence (sampled via keyframes nearest in
-    // time — keys may live outside the window, which is normal in WC3).
-    // This is a stand-in for Warsmash's per-frame alpha sampling: it
-    // gives the right Stand visibility but doesn't yet handle the
-    // dynamic lumber/gold switching that real MDX rendering needs.
-    let kept_geosets: Vec<(usize, &Geoset)> = model
-        .geosets
-        .iter()
-        .enumerate()
-        .filter(|(gidx, _)| match (stand.as_ref(), model.geoset_alpha.get(*gidx)) {
-            (Some(stand_seq), Some(Some(entry))) => {
-                let sample_t = stand_seq.start_ms + (stand_seq.end_ms - stand_seq.start_ms) / 2;
-                let alpha = sample_alpha_at(entry, sample_t);
-                alpha >= 0.5
-            }
-            _ => true,
-        })
-        .collect();
-
+    // Emit ALL geosets — Warsmash-style. The per-frame alpha sampler in
+    // MdxInstance drives visibility via material albedo.a at runtime, so
+    // there's nothing to pre-filter here.
     let mut mesh = ArrayMesh::new_gd();
     let mut surface_textures = Vec::new();
+    let mut geoset_indices: Vec<usize> = Vec::new();
 
     let obj_to_bone = object_id_to_bone_idx(model);
 
-    for (_, g) in kept_geosets {
+    for (gidx, g) in model.geosets.iter().enumerate() {
         if g.faces.is_empty() {
             continue;
         }
@@ -144,38 +124,10 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
 
         let tex_name = resolve_texture_name(model, g.material_id);
         surface_textures.push(tex_name);
+        geoset_indices.push(gidx);
     }
 
-    BuiltMesh { mesh, surface_textures }
-}
-
-/// Sample the geoset's alpha curve at time `t_ms`. Falls back to
-/// `static_alpha` only when the curve has no keys at all (WC3 default).
-fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32) -> f32 {
-    if entry.keys.is_empty() {
-        return entry.static_alpha;
-    }
-    // Find the bracketing keyframes; clamp at the ends.
-    let (mut prev, mut next): (Option<&(u32, f32)>, Option<&(u32, f32)>) = (None, None);
-    for k in &entry.keys {
-        if k.0 <= t_ms {
-            prev = Some(k);
-        }
-        if k.0 >= t_ms && next.is_none() {
-            next = Some(k);
-        }
-    }
-    match (prev, next) {
-        (Some(a), Some(b)) if a.0 == b.0 => a.1,
-        (Some(a), Some(b)) => {
-            let span = (b.0 - a.0) as f32;
-            let f = if span > 0.0 { (t_ms - a.0) as f32 / span } else { 0.0 };
-            a.1 + (b.1 - a.1) * f
-        }
-        (Some(a), None) => a.1,
-        (None, Some(b)) => b.1,
-        (None, None) => entry.static_alpha,
-    }
+    BuiltMesh { mesh, surface_textures, geoset_indices }
 }
 
 fn wc3_to_godot_pos(pos: [f32; 3]) -> [f32; 3] {

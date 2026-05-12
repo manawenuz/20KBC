@@ -4,6 +4,37 @@ pub mod parser;
 pub mod skin;
 pub mod types;
 
+use types::GeosetAlpha;
+
+/// Sample a GEOA alpha curve at `t_ms`. Linear interp between bracketing
+/// keys; clamps at curve ends; falls back to `static_alpha` only when
+/// the curve has no keys at all. Matches Warsmash's runtime behavior.
+pub fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32) -> f32 {
+    if entry.keys.is_empty() {
+        return entry.static_alpha;
+    }
+    let (mut prev, mut next): (Option<&(u32, f32)>, Option<&(u32, f32)>) = (None, None);
+    for k in &entry.keys {
+        if k.0 <= t_ms {
+            prev = Some(k);
+        }
+        if k.0 >= t_ms && next.is_none() {
+            next = Some(k);
+        }
+    }
+    match (prev, next) {
+        (Some(a), Some(b)) if a.0 == b.0 => a.1,
+        (Some(a), Some(b)) => {
+            let span = (b.0 - a.0) as f32;
+            let f = if span > 0.0 { (t_ms - a.0) as f32 / span } else { 0.0 };
+            a.1 + (b.1 - a.1) * f
+        }
+        (Some(a), None) => a.1,
+        (None, Some(b)) => b.1,
+        (None, None) => entry.static_alpha,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use godot::prelude::NodePath;
