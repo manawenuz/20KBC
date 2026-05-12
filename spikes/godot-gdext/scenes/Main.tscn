@@ -63,6 +63,50 @@ anchor_bottom = 1.0
 text = "FPS: --"
 horizontal_alignment = 2
 
+[node name="BoxSelector" type="BoxSelector" parent="CanvasLayer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="UnitPortrait" type="UnitPortrait" parent="CanvasLayer"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -160.0
+offset_right = 280.0
+offset_bottom = -16.0
+visible = false
+
+[node name="NameLabel" type="Label" parent="CanvasLayer/UnitPortrait"]
+offset_left = 8.0
+offset_top = 4.0
+offset_right = 256.0
+offset_bottom = 28.0
+text = "Worker"
+
+[node name="HpBar" type="ProgressBar" parent="CanvasLayer/UnitPortrait"]
+offset_left = 8.0
+offset_top = 36.0
+offset_right = 256.0
+offset_bottom = 56.0
+max_value = 100.0
+value = 100.0
+
+[node name="SupplyBar" type="ProgressBar" parent="CanvasLayer/UnitPortrait"]
+offset_left = 8.0
+offset_top = 64.0
+offset_right = 256.0
+offset_bottom = 84.0
+max_value = 10.0
+value = 10.0
+
+[node name="CountLabel" type="Label" parent="CanvasLayer/UnitPortrait"]
+offset_left = 8.0
+offset_top = 92.0
+offset_right = 256.0
+offset_bottom = 116.0
+text = "1 unit"
+
 [node name="Units" type="Node3D" parent="."]
 
 [node name="Resources" type="Node3D" parent="."]
