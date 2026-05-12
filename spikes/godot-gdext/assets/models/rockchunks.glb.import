@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bw0klusroih24"
-path="res://.godot/imported/peasant.glb-f3a2751a9d68d4b6d74433b4c8317192.scn"
+uid="uid://csbjy5q0n8j8f"
+path="res://.godot/imported/rockchunks.glb-840c793586f239045c12cd0ccb4be8ff.scn"
 
 [deps]
 
-source_file="res://assets/models/peasant.glb"
-dest_files=["res://.godot/imported/peasant.glb-f3a2751a9d68d4b6d74433b4c8317192.scn"]
+source_file="res://assets/models/rockchunks.glb"
+dest_files=["res://.godot/imported/rockchunks.glb-840c793586f239045c12cd0ccb4be8ff.scn"]
 
 [params]
 
