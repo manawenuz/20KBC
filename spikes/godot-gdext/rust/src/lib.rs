@@ -12,6 +12,7 @@ mod selection_manager;
 mod sim_bridge;
 mod terrain_node;
 mod unit_node;
+mod unit_portrait;
 
 /// Extension entry point — called by Godot when the .gdextension is loaded.
 struct SpikGodotGdext;
