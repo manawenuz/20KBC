@@ -1,6 +1,7 @@
 use glam::Vec2;
 use std::io::Write as IoWrite;
 
+use crate::building::{BuildingKind, CBuilding};
 use crate::config::SimConfig;
 use crate::gaia::{CGaiaEntity, update_gaia};
 use crate::orders::{InputEntry, Order};
@@ -19,6 +20,7 @@ pub struct CSimulation {
     pub resource_nodes: Vec<CResourceNode>,
     pub players: Vec<CPlayer>,
     pub gaia: Vec<CGaiaEntity>,
+    pub buildings: Vec<CBuilding>,
     pub pathfinder: GridPathfinder,
     pub rng: DeterministicRng,
     pub pending_orders: Vec<(UnitId, Order)>,
@@ -40,6 +42,7 @@ impl CSimulation {
             resource_nodes: Vec::new(),
             players: Vec::new(),
             gaia: Vec::new(),
+            buildings: Vec::new(),
             pathfinder,
             rng,
             pending_orders: Vec::new(),
@@ -57,6 +60,13 @@ impl CSimulation {
         let depot = Vec2::new(half_w, half_h);
         p0.supply_depot = Some(depot);
         sim.players.push(p0);
+
+        // Spawn 3 buildings around the depot.
+        sim.buildings = vec![
+            CBuilding::new(BuildingKind::TownHall, depot, 0.0),
+            CBuilding::new(BuildingKind::Keep,    depot + Vec2::new(-25.0, -8.0), 0.3),
+            CBuilding::new(BuildingKind::Castle,  depot + Vec2::new(28.0, 12.0), -0.4),
+        ];
 
         // Spawn 10 starter workers in a circle around the depot, radius 4.0 wu.
         const STARTER_WORKERS: u32 = 10;
@@ -135,6 +145,10 @@ impl CSimulation {
         self.gaia
             .push(CGaiaEntity::new(id, pos, territory_center, territory_radius));
         id
+    }
+
+    pub fn spawn_building(&mut self, kind: BuildingKind, pos: Vec2, rotation: f32) {
+        self.buildings.push(CBuilding::new(kind, pos, rotation));
     }
 
     // ── Public interface ─────────────────────────────────────────────────────
