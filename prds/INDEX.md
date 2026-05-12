@@ -26,14 +26,31 @@ Each PRD is self-contained: an agent reading only the PRD must be able to execut
 
 All 4 PRDs landed; integration glue committed; smoke-tested in Godot.
 
-## Batch 2 (parallel)
+## Batch 2 (merged)
+
+All 4 landed: 10 workers, day/night, replay-on-quit, stress + frame-time HUD.
+
+## Batch 3 (parallel — asset infra + gameplay foundations)
 
 | ID | Title | Worktree | Status |
 |----|-------|----------|--------|
-| 05 | 10-worker starter pack + stone node | `.worktrees/prd-05-spawn` | pending |
-| 06 | Day/night cycle | `.worktrees/prd-06-day-night` | pending |
-| 07 | Replay log save-on-quit (bridge method) | `.worktrees/prd-07-replay` | pending |
-| 08 | Stress-test mode + frame-time HUD | `.worktrees/prd-08-stress` | pending |
+| 09 | WC3 MDX→glTF extraction (best effort) | `.worktrees/prd-09-mdx` | pending |
+| 10 | OSS CC0 fallback model pack | `.worktrees/prd-10-oss-models` | pending |
+| 11 | Terrain texture polish | `.worktrees/prd-11-terrain-polish` | pending |
+| 12 | Box-drag multi-select | `.worktrees/prd-12-box-select` | pending |
+| 13 | Formation move planner | `.worktrees/prd-13-formation` | pending |
+| 14 | Attack-move + hostile target | `.worktrees/prd-14-attack-move` | pending |
+| 15 | Combat feedback FX | `.worktrees/prd-15-combat-fx` | pending |
+| 16 | Selected-unit portrait HUD | `.worktrees/prd-16-portrait` | pending |
+
+## Batch 4 (after batch 3 — animated models + audio)
+
+| ID | Title | Worktree | Status |
+|----|-------|----------|--------|
+| 17 | Animated peasant model | `.worktrees/prd-17-peasant` | pending |
+| 18 | Animated wolf model | `.worktrees/prd-18-wolf` | pending |
+| 19 | Tree + stone outcrop models | `.worktrees/prd-19-doodads` | pending |
+| 20 | WC3 audio extraction + SoundFx | `.worktrees/prd-20-audio` | pending |
 
 ## Reading order for an agent
 
