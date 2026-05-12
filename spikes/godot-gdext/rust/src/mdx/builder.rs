@@ -71,10 +71,14 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
             uvs.push(Vector2::new(uv[0], 1.0 - uv[1]));
         }
 
+        // Reverse winding: the (x, y, z) → (x, z, -y) WC3→Godot transform
+        // flips handedness, turning CCW triangles into CW. Without this
+        // swap, Godot's default backface culling hides every front face
+        // — visible only as thin "blade" silhouettes from edge-on angles.
         for (i0, i1, i2) in &g.faces {
             indices.push(*i0 as i32);
-            indices.push(*i1 as i32);
             indices.push(*i2 as i32);
+            indices.push(*i1 as i32);
         }
 
         let mut arrays = VarArray::new();
