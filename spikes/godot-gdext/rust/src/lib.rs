@@ -1,6 +1,7 @@
 use godot::prelude::*;
 
 mod box_selector;
+mod building_node;
 mod camera_controller;
 mod damage_number;
 mod day_night;
