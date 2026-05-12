@@ -9,6 +9,8 @@ script = ExtResource("1_main")
 
 [node name="SelectionManager" type="SelectionManager" parent="."]
 
+[node name="SoundFx" type="SoundFx" parent="."]
+
 [node name="TerrainNode" type="TerrainNode" parent="."]
 
 [node name="RtsCameraController" type="RtsCameraController" parent="."]
