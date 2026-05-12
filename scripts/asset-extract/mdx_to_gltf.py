@@ -649,10 +649,14 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
 
     # Build hierarchy across all nodes (bones + helpers). joint_children[i] holds
     # the all_nodes indices of node i's children. Indices are in [0, len(all_nodes)).
+    #
+    # Defensive: reject self-references (some MDX buildings have a bone whose
+    # parent_id equals its own object_id — that creates a cycle and Godot's
+    # GLTF importer infinite-loops on it). Treat such nodes as roots.
     joint_children = [[] for _ in all_nodes]
     root_joint_indices = []
     for node_pos, n in enumerate(all_nodes):
-        if n.parent_id in all_obj_ids:
+        if n.parent_id in all_obj_ids and n.parent_id != n.object_id:
             parent_pos = object_id_to_node_pos[n.parent_id]
             joint_children[parent_pos].append(node_pos)
         else:
