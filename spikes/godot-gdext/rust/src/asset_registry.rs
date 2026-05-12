@@ -12,21 +12,26 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use godot::classes::image::Format;
-use godot::classes::{Image, ImageTexture, Texture2D};
+use godot::classes::{AnimationLibrary, Image, ImageTexture, Skeleton3D, Skin, Texture2D};
 use godot::prelude::*;
 
 use crate::blp::decode_blp;
 use crate::datasource::{DataSource, MpqDataSource};
-use crate::mdx::builder::build_mesh;
+use crate::mdx::builder::{build_animation_library, build_mesh, build_skeleton, build_skin};
 use crate::mdx::parser::parse_mdx;
 
-/// Cached, ready-to-mount model.
+/// Cached, ready-to-mount model. `skeleton`, `skin`, and `animations`
+/// are populated only when the MDX had any bones — pure prop meshes
+/// (terrain doodads, etc.) get `None` for the rigging fields.
 #[derive(Clone)]
 pub struct ResolvedModel {
     pub mesh: Gd<godot::classes::ArrayMesh>,
     /// One entry per mesh surface. `None` if the MDX material layer
     /// referenced no resolvable texture (replaceable team-color etc.).
     pub textures: Vec<Option<Gd<Texture2D>>>,
+    pub skeleton: Option<Gd<Skeleton3D>>,
+    pub skin: Option<Gd<Skin>>,
+    pub animations: Option<Gd<AnimationLibrary>>,
 }
 
 pub struct AssetRegistry {
@@ -63,9 +68,24 @@ impl AssetRegistry {
         for name in &built.surface_textures {
             textures.push(name.as_deref().and_then(|n| self.load_texture(n)));
         }
+
+        let (skeleton, skin, animations) = if model.bones.is_empty() && model.helpers.is_empty() {
+            (None, None, None)
+        } else {
+            let sk = build_skeleton(&model);
+            let sn = build_skin(&model, &sk);
+            // Animation tracks target "Skeleton3D:BoneName" — that path
+            // matches the Skeleton3D child node we mount under UnitNode.
+            let lib = build_animation_library(&model, NodePath::from("Skeleton3D"));
+            (Some(sk), Some(sn), Some(lib))
+        };
+
         let resolved = ResolvedModel {
             mesh: built.mesh,
             textures,
+            skeleton,
+            skin,
+            animations,
         };
         self.mdx_cache
             .insert(mdx_path.to_string(), resolved.clone());

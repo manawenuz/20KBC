@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use godot::prelude::*;
 use godot::classes::ArrayMesh;
 use godot::classes::mesh::PrimitiveType;
@@ -10,6 +12,17 @@ pub use super::animation::build_animation_library;
 pub struct BuiltMesh {
     pub mesh: Gd<ArrayMesh>,
     pub surface_textures: Vec<Option<String>>,
+}
+
+/// Build an object_id → skeleton-bone-index map matching the layout used
+/// by `build_skeleton` (bones first, then helpers, in order).
+fn object_id_to_bone_idx(model: &MdxModel) -> HashMap<u32, i32> {
+    let mut map = HashMap::new();
+    let all_nodes = model.bones.iter().chain(model.helpers.iter());
+    for (i, n) in all_nodes.enumerate() {
+        map.insert(n.object_id, i as i32);
+    }
+    map
 }
 
 pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
@@ -41,6 +54,8 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
     let mut mesh = ArrayMesh::new_gd();
     let mut surface_textures = Vec::new();
 
+    let obj_to_bone = object_id_to_bone_idx(model);
+
     for (_, g) in kept_geosets {
         if g.faces.is_empty() {
             continue;
@@ -50,6 +65,18 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
         let mut normals = PackedVector3Array::new();
         let mut uvs = PackedVector2Array::new();
         let mut indices = PackedInt32Array::new();
+        // Bones + weights per vertex — 4 ints/floats per vertex.
+        let mut bones = PackedInt32Array::new();
+        let mut weights = PackedFloat32Array::new();
+
+        // Precompute the matrix-group cumulative starts so vertex_group i
+        // resolves to indices [start..start+group_count] inside matrix_indices.
+        let mut group_starts: Vec<u32> = Vec::with_capacity(g.matrix_group_counts.len());
+        let mut acc: u32 = 0;
+        for &c in &g.matrix_group_counts {
+            group_starts.push(acc);
+            acc += c;
+        }
 
         for v_idx in 0..g.vertex_positions.len() {
             let pos = g.vertex_positions[v_idx];
@@ -69,6 +96,27 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
             };
             // Flip V for Godot
             uvs.push(Vector2::new(uv[0], 1.0 - uv[1]));
+
+            // Skin weights: vertex_groups[v_idx] is an index into matrix
+            // groups; each group lists 1–4 bone object_ids that influence
+            // this vertex with equal weight (WC3 rigid-multi-bone skinning).
+            let mut vb = [0i32; 4];
+            let mut vw = [0.0f32; 4];
+            let vg_idx = g.vertex_groups.get(v_idx).copied().unwrap_or(0) as usize;
+            if vg_idx < g.matrix_group_counts.len() {
+                let count = g.matrix_group_counts[vg_idx] as usize;
+                let start = group_starts[vg_idx] as usize;
+                let w = if count > 0 { 1.0 / count as f32 } else { 0.0 };
+                for k in 0..count.min(4) {
+                    let obj_id = g.matrix_indices.get(start + k).copied().unwrap_or(0);
+                    vb[k] = obj_to_bone.get(&obj_id).copied().unwrap_or(0);
+                    vw[k] = w;
+                }
+            }
+            for j in 0..4 {
+                bones.push(vb[j]);
+                weights.push(vw[j]);
+            }
         }
 
         // Reverse winding: the (x, y, z) → (x, z, -y) WC3→Godot transform
@@ -83,14 +131,15 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
 
         let mut arrays = VarArray::new();
         arrays.resize(13, &Variant::nil());
-        arrays.set(0, &positions.to_variant());
-        arrays.set(1, &normals.to_variant());
-        arrays.set(4, &uvs.to_variant());
-        arrays.set(12, &indices.to_variant());
+        arrays.set(0, &positions.to_variant());   // ARRAY_VERTEX
+        arrays.set(1, &normals.to_variant());     // ARRAY_NORMAL
+        arrays.set(4, &uvs.to_variant());         // ARRAY_TEX_UV
+        arrays.set(10, &bones.to_variant());      // ARRAY_BONES
+        arrays.set(11, &weights.to_variant());    // ARRAY_WEIGHTS
+        arrays.set(12, &indices.to_variant());    // ARRAY_INDEX
 
         mesh.add_surface_from_arrays(PrimitiveType::TRIANGLES, &arrays);
 
-        // Resolve texture name from material layer 0
         let tex_name = resolve_texture_name(model, g.material_id);
         surface_textures.push(tex_name);
     }

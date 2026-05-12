@@ -343,14 +343,35 @@ impl UnitNode {
             .and_then(|n| n.try_cast::<crate::sim_bridge::SimBridge>().ok())
     }
 
-    /// Try to spawn this unit's visual from the runtime AssetRegistry
-    /// (PRDs 30-35 pipeline). Returns true on success — caller should
-    /// skip the res://*.glb fallback. Returns false if the registry
-    /// isn't initialised or the MDX isn't in the MPQ.
+    /// Try to spawn this unit's visual from the runtime AssetRegistry.
+    /// Mounts the skeleton + skin + AnimationPlayer when present so
+    /// peasants actually animate (Walk by default, Stand fallback).
+    /// Tree shape under UnitNode:
+    ///   VisualRoot (Node3D, scaled 0.02)
+    ///     ├── Skeleton3D
+    ///     ├── MeshInstance3D (skeleton_path = ../Skeleton3D, skin = built skin)
+    ///     └── AnimationPlayer
     fn try_spawn_from_registry(&mut self, mdx_path: &str) -> bool {
         use godot::classes::base_material_3d::TextureParam;
+        use godot::classes::{AnimationPlayer, Material};
         let resolved = crate::asset_registry::with(|reg| reg.load(mdx_path)).flatten();
         let Some(r) = resolved else { return false };
+
+        let mut visual = Node3D::new_alloc();
+        visual.set_scale(Vector3::new(0.02, 0.02, 0.02));
+
+        let has_skeleton = r.skeleton.is_some() && r.skin.is_some();
+        if let Some(proto) = r.skeleton.clone() {
+            // Skeleton3D is a NODE not a Resource — every spawn needs its
+            // own duplicate so we don't reparent the prototype.
+            if let Some(dup) = proto.duplicate() {
+                if let Ok(mut sk) = dup.try_cast::<godot::classes::Skeleton3D>() {
+                    sk.set_name("Skeleton3D");
+                    visual.add_child(&sk);
+                }
+            }
+        }
+
         let mut mi = MeshInstance3D::new_alloc();
         mi.set_mesh(&r.mesh);
         for (i, tex) in r.textures.iter().enumerate() {
@@ -358,11 +379,32 @@ impl UnitNode {
                 let mut mat = StandardMaterial3D::new_gd();
                 mat.set_texture(TextureParam::ALBEDO, t);
                 mat.set_shading_mode(ShadingMode::PER_PIXEL);
-                mi.set_surface_override_material(i as i32, &mat.upcast::<godot::classes::Material>());
+                mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
             }
         }
-        mi.set_scale(Vector3::new(0.02, 0.02, 0.02));
-        self.base_mut().add_child(&mi);
+        visual.add_child(&mi);
+        if has_skeleton {
+            mi.set_skeleton_path(&NodePath::from("../Skeleton3D"));
+            if let Some(sn) = r.skin.clone() {
+                mi.set_skin(&sn);
+            }
+        }
+
+        if let Some(lib) = r.animations.clone() {
+            let mut anim = AnimationPlayer::new_alloc();
+            // Add as default library so animations resolve by bare name.
+            anim.add_animation_library(&StringName::default(), &lib);
+            visual.add_child(&anim);
+            // Play Walk first, then Stand, then Stand Ready as fallbacks.
+            for name in ["Walk", "Stand", "Stand Ready", "Birth"] {
+                if anim.has_animation(name) {
+                    anim.play_ex().name(name).done();
+                    break;
+                }
+            }
+        }
+
+        self.base_mut().add_child(&visual);
         self.mesh = Some(mi);
         true
     }
