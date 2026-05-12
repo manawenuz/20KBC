@@ -318,6 +318,7 @@ def parse_mdx(data: bytes) -> dict:
     materials = []
     geosets = []
     bones = []
+    helpers = []
     pivots = []
     sequences = []
 
@@ -471,6 +472,13 @@ def parse_mdx(data: bytes) -> dict:
         elif chunk_id == "BONE":
             bones = _parse_bone_nodes(chunk_data)
 
+        elif chunk_id == "HELP":
+            # Helper nodes share the same 96-byte header as BONE. They aren't
+            # skinning targets, but they may be parents of bones — without
+            # them in the node tree, bones whose MDX parent is a HELP become
+            # disconnected roots and the skin falls apart.
+            helpers = _parse_bone_nodes(chunk_data)
+
         elif chunk_id == "PIVT":
             count = len(chunk_data) // 12
             for i in range(count):
@@ -495,6 +503,7 @@ def parse_mdx(data: bytes) -> dict:
         "materials": materials,
         "geosets": geosets,
         "bones": bones,
+        "helpers": helpers,
         "pivots": pivots,
         "sequences": sequences,
     }
@@ -522,24 +531,37 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     materials = mdx_data["materials"]
     textures = mdx_data["textures"]
     bones = mdx_data.get("bones", [])
+    helpers = mdx_data.get("helpers", [])
     pivots = mdx_data.get("pivots", [])
     sequences = mdx_data.get("sequences", [])
 
-    # Build object_id -> joint_index map for bones
+    # all_nodes = bones first, then helpers. Bones keep their indices [0..len(bones))
+    # so the existing animation/skin code that targets node index = 1 + bone_index
+    # stays valid. Helpers occupy indices [len(bones)..len(all_nodes)).
+    all_nodes = list(bones) + list(helpers)
+
+    # Build object_id -> joint_index map for bones (skin joints, not nodes)
     object_id_to_joint = {}
     for joint_idx, bone in enumerate(bones):
         object_id_to_joint[bone.object_id] = joint_idx
 
-    # Build bone parent relationships (only among bones)
-    bone_obj_ids = {b.object_id for b in bones}
-    joint_children = [[] for _ in bones]
+    # Build object_id -> all_nodes index map (covers bones AND helpers)
+    object_id_to_node_pos = {}
+    for node_pos, n in enumerate(all_nodes):
+        object_id_to_node_pos[n.object_id] = node_pos
+
+    all_obj_ids = set(object_id_to_node_pos.keys())
+
+    # Build hierarchy across all nodes (bones + helpers). joint_children[i] holds
+    # the all_nodes indices of node i's children. Indices are in [0, len(all_nodes)).
+    joint_children = [[] for _ in all_nodes]
     root_joint_indices = []
-    for joint_idx, bone in enumerate(bones):
-        if bone.parent_id in bone_obj_ids:
-            parent_joint = object_id_to_joint[bone.parent_id]
-            joint_children[parent_joint].append(joint_idx)
+    for node_pos, n in enumerate(all_nodes):
+        if n.parent_id in all_obj_ids:
+            parent_pos = object_id_to_node_pos[n.parent_id]
+            joint_children[parent_pos].append(node_pos)
         else:
-            root_joint_indices.append(joint_idx)
+            root_joint_indices.append(node_pos)
 
     # Collect all vertex data + skinning data
     all_positions = []
@@ -781,12 +803,13 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         })
         primitives.append(prim)
 
-    # Build bone nodes
+    # Build glTF nodes for every MDX node (bones + helpers).
+    # Local translation is pivot_pos - parent_pivot_pos (or absolute if root).
     bone_nodes = []
-    for joint_idx, bone in enumerate(bones):
-        pivot_gl = _wc3_to_gltf_pos(pivots[bone.object_id]) if bone.object_id < len(pivots) else (0.0, 0.0, 0.0)
-        if bone.parent_id in bone_obj_ids and bone.parent_id < len(pivots):
-            parent_pivot_gl = _wc3_to_gltf_pos(pivots[bone.parent_id])
+    for node_pos, n in enumerate(all_nodes):
+        pivot_gl = _wc3_to_gltf_pos(pivots[n.object_id]) if n.object_id < len(pivots) else (0.0, 0.0, 0.0)
+        if n.parent_id in all_obj_ids and n.parent_id < len(pivots):
+            parent_pivot_gl = _wc3_to_gltf_pos(pivots[n.parent_id])
             local_translation = (
                 pivot_gl[0] - parent_pivot_gl[0],
                 pivot_gl[1] - parent_pivot_gl[1],
@@ -796,14 +819,14 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
             local_translation = pivot_gl
 
         node = {
-            "name": bone.name,
+            "name": n.name,
             "translation": [local_translation[0], local_translation[1], local_translation[2]],
         }
-        if joint_children[joint_idx]:
-            # joint_children holds JOINT indices; glTF "children" expects
-            # NODE indices. Bones live at node indices [1 .. 1+len(bones)]
+        if joint_children[node_pos]:
+            # joint_children holds all_nodes indices; glTF "children" expects
+            # NODE indices. Nodes live at glTF indices [1 .. 1+len(all_nodes)]
             # (mesh node is at 0), so offset by 1.
-            node["children"] = [1 + c for c in joint_children[joint_idx]]
+            node["children"] = [1 + c for c in joint_children[node_pos]]
         bone_nodes.append(node)
 
     # Build inverse bind matrices
