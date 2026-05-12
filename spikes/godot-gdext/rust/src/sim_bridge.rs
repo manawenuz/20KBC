@@ -224,4 +224,13 @@ impl SimBridge {
             }
         }
     }
+
+    /// Returns the current HP of the unit with the given id.
+    /// Returns -1.0 if the unit is not found.
+    #[func]
+    pub fn get_unit_hp(&self, unit_id: u32) -> f32 {
+        self.sim.as_ref()
+            .and_then(|s| s.iter_units().find(|u| u.id == unit_id))
+            .map(|u| u.hp).unwrap_or(-1.0)
+    }
 }
