@@ -13,7 +13,6 @@ mod gaia_node;
 mod hud;
 mod material_tint;
 mod mdx;
-mod mdx_instance;
 mod resource_node_visual;
 mod selection_manager;
 mod sim_bridge;

@@ -19,20 +19,16 @@ WC3 / WarsmashModEngine does.
   - `mdx/skin.rs` builds `Skeleton3D` + `Skin` (parent-relative rest, absolute-pivot inverse-bind, self-cycle guard).
   - `mdx/animation.rs` emits an `AnimationLibrary` with one `Animation` per sequence; position keys are `rest + delta`.
   - `asset_registry.rs` is a thread-local cache from `mdx_path → ResolvedModel` (mesh, textures, skeleton, skin, anims, parsed model).
-- **Per-frame geoset alpha** (PRD-37, Warsmash-style):
-  - `mdx_instance.rs` is a `Node` child of each visual; every frame it samples each geoset's GEOA curve at the active sequence's elapsed time and writes the result into the corresponding surface material's `albedo.a`.
-  - GEOA sampling is sequence-scoped: only keys within `[seq_start, seq_end]` are interpolated; no in-window keys → `static_alpha`. Matches WC3's runtime semantics so out-of-window keys (e.g. Stand Work) don't bleed into Stand.
-  - Materials use `Transparency::ALPHA` so fades are smooth, no halos.
-  - Behavior-driven animation switch in `UnitNode::process` calls `mdx_instance.set_sequence(name)` so the alpha sampler tracks the same window the `AnimationPlayer` is in.
+- **Build-time geoset filter**: `mdx/builder.rs` keeps only geosets whose GEOA alpha is ≥ 0.5 at the Stand-sequence midpoint, sampled across the global keyframe timeline. Produces an upright peasant with body + boots + head, but **arms are missing** (their GEOA keys live in Stand Ready / Stand Work).
 
 ### What's rough or unfinished
 
-- **Posture issues remain on some peasants** — the top-left peasant in screenshot #31 is hunched. Most likely cause: MDX scale tracks (`KGSC`) emitted into Godot `SCALE_3D` tracks have keyframes that drive bones to near-zero scale. Suspect fix mirrors what we did for GEOA: scope scale-track samples to the active sequence window (or clamp away anything below ~0.01).
-- **Arms** — fixed in principle by the sequence-windowed sampler in commit `e3e106f`, but not yet visually re-verified.
-- **Only `UnitNode` is wired to `MdxInstance`.** `GaiaNode` (wolf), `BuildingNode`, and `ResourceNode` still go through the older "build materials inline" path. Same wiring needs to be applied to all four for consistent behavior (death-fade alpha on units, fall-down trees, etc.).
+- **Missing arms on peasants.** The build-time GEOA filter picks one binary visibility per geoset, but Blizzard's models animate arm visibility across sequences (arms alpha=1 in Stand, alpha=0 in Stand Work etc.). A static pick can't represent both.
+- **PRD-37 (per-frame GEOA alpha, Warsmash-style) was attempted and reverted.** The implementation introduced an `MdxInstance` per-spawn driver that sampled GEOA each frame and wrote to `albedo.a`. Visually it produced a worse result than the build-time filter (collapsed / mangled peasants in screenshots #30 and #31), so it was rolled back. The right fix likely needs all of: per-frame sampling **+** sequence-scoped GEOA windowing **+** sequence-scoped scale-track windowing **+** material transparency tuning. Treat as a clean re-attempt, not a small patch. Reference: `core/src/com/etheller/warsmash/viewer5/handlers/mdx/MdxComplexInstance.java` lines 423–470.
+- **Posture issues on some peasants** — the hunched top-left peasant in screenshot #31. Most likely cause: MDX scale tracks (`KGSC`) emitted into Godot `SCALE_3D` tracks have keyframes that drive bones to near-zero scale at the current sample time. Likely fix: scope scale-track keyframes to the active sequence window in `animation.rs`.
 - **Team color**: `team_color.rs` and the replaceable-texture path exist (PRD-35) but are inactive — peasants are not painted per-player.
 - **WC3 multi-layer shader**: `wc3_material/mod.rs` exists (PRD-33) but isn't used; everything renders with `StandardMaterial3D`.
-- **Lumber-on-shoulder when carrying wood**: deferred. With per-frame GEOA alpha working, this becomes free once the sim emits a "carrying lumber" behavior that selects the right sequence (Stand Work / Stand Lumber).
+- **Lumber-on-shoulder when carrying wood**: blocked on per-frame GEOA alpha. Won't work until PRD-37 lands cleanly.
 - **Keep producing peasants** is a gameplay feature, never started.
 
 ---
@@ -51,9 +47,7 @@ spikes/godot-gdext/
 │       ├── lib.rs                  GDExtension entry point + module list
 │       ├── sim_bridge.rs           Wraps CSimulation, initializes AssetRegistry
 │       ├── asset_registry.rs      Thread-local MDX/BLP cache → ResolvedModel
-│       ├── mdx/                    parser, builder, skin, animation, types
-│       │   └── mod.rs              sample_alpha_at (sequence-scoped GEOA sampler)
-│       ├── mdx_instance.rs         Per-spawn per-frame alpha driver (PRD-37)
+│       ├── mdx/                    parser, builder (with build-time GEOA filter), skin, animation, types
 │       ├── blp/mod.rs              BLP1 decoder → RGBA8
 │       ├── datasource/             mpq, compound (compound unused so far)
 │       ├── terrain_node.rs / day_night.rs / camera_controller.rs / hud.rs / ...
@@ -88,16 +82,16 @@ game still runs without textures/animation.
 `thread_local!<RefCell<Option<AssetRegistry>>>`. All Godot callbacks
 run on the main thread anyway.
 
-**Per-instance materials, shared mesh.** `ResolvedModel.mesh` is shared
-across all spawns of the same MDX (cached). Materials are recreated per
-spawn so `MdxInstance` can mutate `albedo.a` without bleeding alpha
-across peasants. `Skeleton3D` is also recreated (via `.duplicate()`)
-per spawn because nodes can have only one parent.
+**Shared mesh, per-spawn skeleton.** `ResolvedModel.mesh` is cached and
+shared across spawns of the same MDX. `Skeleton3D` is recreated per
+spawn (via `.duplicate()`) because Godot nodes can have only one
+parent.
 
-**Sequence-scoped GEOA sampling.** Critical for correctness: each WC3
-sequence is independent. Sampling keys globally would let a Stand Work
-key with alpha=0 fade out the arm geoset during Stand. The fix is in
-`mdx/mod.rs::sample_alpha_at(entry, t, seq_start, seq_end)`.
+**Sequence-scoped sampling (note for the PRD-37 re-attempt).** When
+re-implementing per-frame GEOA, sample only keys within `[seq_start,
+seq_end]`. Each WC3 sequence is independent; sampling keys globally
+would let a Stand Work key with alpha=0 fade out the arm geoset
+during Stand. Same constraint applies to scale tracks.
 
 **WC3 → Godot coord transform.** `(x, y, z) → (x, z, -y)`. This flips
 handedness, so triangle winding is reversed (`i0, i2, i1`) in
@@ -124,16 +118,17 @@ go in unchanged.
 
 ## Next tasks (priority order)
 
-1. **Visually verify arms appear** after `e3e106f` (sequence-scoped GEOA). Screenshot a fresh launch.
-2. **Fix hunched-posture peasant** (scale tracks). Scope scale-track keyframes to the active sequence window in `animation.rs`, mirroring the GEOA fix.
-3. **Apply `MdxInstance` to `GaiaNode`, `BuildingNode`, `ResourceNode`**. Same wiring as `UnitNode::try_spawn_from_registry`:
-   - Build materials per-instance.
-   - Add `MdxInstance` child, configure with `(model, geoset_indices, materials)`.
-   - Call `set_sequence` on behavior transitions.
-4. **Activate team color** (PRD-35). The cache + replaceable-id logic is built; UnitNode needs to look up the unit's player owner via `SimBridge` and request the matching team-color texture for surfaces whose original `TextureRef.replaceable_id == 1`.
-5. **Activate WC3 multi-layer shader** (PRD-33). Replace `StandardMaterial3D` with the `ShaderMaterial` that handles MDX filter modes (None / Transparent / Blend / Additive / AddAlpha / Modulate / Modulate2x). Needed for the team-color glow, fire, water, etc.
-6. **Keep produces peasants**: gameplay feature, needs game-core support (production queue per building) + GDScript UI.
-7. **Lumber on shoulder**: requires sim-side "carrying lumber" behavior bit + `UnitNode` mapping it to "Stand Work" / "Stand Lumber". With per-frame GEOA alpha working, the bundle geoset will appear automatically when the right sequence is active.
+1. **Re-attempt PRD-37 (per-frame GEOA alpha) cleanly.** Restore the `MdxInstance` per-spawn driver, but get all four constraints right at once:
+   - Sample alpha only within the active sequence window.
+   - Don't emit out-of-window keys as Godot animation tracks (positions, rotations, **scales**) either — same global-keyframe trap.
+   - Use `Transparency::ALPHA` and verify there's no halo / sort order issue.
+   - Verify visually with a screenshot before declaring victory.
+   The prior commits `497d7b3`, `e3e106f`, and `766b7b6` were reverted; check their diffs as a reference but don't replay them verbatim.
+2. **Fix hunched-posture peasant** (scale tracks). Scope scale-track keyframes to the active sequence window in `animation.rs`. Probably needs the same fix as the GEOA windowing.
+3. **Activate team color** (PRD-35). The cache + replaceable-id logic is built; UnitNode needs to look up the unit's player owner via `SimBridge` and request the matching team-color texture for surfaces whose original `TextureRef.replaceable_id == 1`.
+4. **Activate WC3 multi-layer shader** (PRD-33). Replace `StandardMaterial3D` with the `ShaderMaterial` that handles MDX filter modes (None / Transparent / Blend / Additive / AddAlpha / Modulate / Modulate2x). Needed for team-color glow, fire, water, etc.
+5. **Keep produces peasants**: gameplay feature, needs game-core support (production queue per building) + GDScript UI.
+6. **Lumber on shoulder**: blocked on task 1.
 
 ---
 
@@ -162,4 +157,4 @@ Located in `prds/`:
 - 34 — Runtime skinning + animation library
 - 35 — Team color (built, inactive)
 - 36 — UnitNode / BuildingNode runtime integration
-- 37 — Warsmash-style per-frame geoset alpha (landed in commit 497d7b3 + e3e106f)
+- 37 — Warsmash-style per-frame geoset alpha (**attempted and reverted**; see next-tasks note 1)

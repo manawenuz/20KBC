@@ -4,50 +4,6 @@ pub mod parser;
 pub mod skin;
 pub mod types;
 
-use types::GeosetAlpha;
-
-/// Sample a GEOA alpha curve at `t_ms`, restricted to the active
-/// sequence window `[seq_start, seq_end]`. Matches WC3 / Warsmash
-/// runtime semantics: each sequence is independent, so keys outside
-/// the active window must NOT influence the value (otherwise a Stand
-/// Work key at alpha=0 would bleed into the Stand sequence and fade
-/// the arm geoset out for half the cycle).
-///
-/// - No keys in the window → `static_alpha` (the default-visibility flag).
-/// - One or more keys in the window → interpolate; clamp at window
-///   edges to the nearest in-window key.
-pub fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32, seq_start: u32, seq_end: u32) -> f32 {
-    let mut in_win: Vec<&(u32, f32)> = entry
-        .keys
-        .iter()
-        .filter(|(t, _)| *t >= seq_start && *t <= seq_end)
-        .collect();
-    if in_win.is_empty() {
-        return entry.static_alpha;
-    }
-    in_win.sort_by_key(|(t, _)| *t);
-    let (mut prev, mut next): (Option<&(u32, f32)>, Option<&(u32, f32)>) = (None, None);
-    for k in &in_win {
-        if k.0 <= t_ms {
-            prev = Some(*k);
-        }
-        if k.0 >= t_ms && next.is_none() {
-            next = Some(*k);
-        }
-    }
-    match (prev, next) {
-        (Some(a), Some(b)) if a.0 == b.0 => a.1,
-        (Some(a), Some(b)) => {
-            let span = (b.0 - a.0) as f32;
-            let f = if span > 0.0 { (t_ms - a.0) as f32 / span } else { 0.0 };
-            a.1 + (b.1 - a.1) * f
-        }
-        (Some(a), None) => a.1,
-        (None, Some(b)) => b.1,
-        (None, None) => entry.static_alpha,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use godot::prelude::NodePath;
