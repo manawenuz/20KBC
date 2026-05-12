@@ -1,6 +1,7 @@
 use godot::prelude::*;
 
 mod camera_controller;
+mod frame_time_label;
 mod gaia_node;
 mod hud;
 mod selection_manager;
