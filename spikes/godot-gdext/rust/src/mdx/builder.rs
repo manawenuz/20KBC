@@ -33,36 +33,23 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
         .find(|s| s.name.to_lowercase().starts_with("stand"))
         .or_else(|| model.sequences.first());
 
+    // Build-time filter: keep geosets whose GEOA alpha is >= 0.5 at the
+    // mid-point of the Stand sequence (sampled via keyframes nearest in
+    // time — keys may live outside the window, which is normal in WC3).
+    // This is a stand-in for Warsmash's per-frame alpha sampling: it
+    // gives the right Stand visibility but doesn't yet handle the
+    // dynamic lumber/gold switching that real MDX rendering needs.
     let kept_geosets: Vec<(usize, &Geoset)> = model
         .geosets
         .iter()
         .enumerate()
-        .filter(|(gidx, _)| {
-            let keep = match (stand.as_ref(), model.geoset_alpha.get(*gidx)) {
-                (Some(stand_seq), Some(Some(entry))) => {
-                    // Some peasant geosets have NO alpha keys within the
-                    // Stand window — those should fall back to static_alpha
-                    // (the default-visibility flag) instead of being treated
-                    // as alpha=0. Without this fallback, the arm geoset (its
-                    // keys mostly live in Stand Ready / Stand Work) gets
-                    // dropped from the basic Stand build.
-                    let in_window_max = entry
-                        .keys
-                        .iter()
-                        .filter(|(t, _)| *t >= stand_seq.start_ms && *t <= stand_seq.end_ms)
-                        .map(|(_, a)| *a)
-                        .fold(f32::NEG_INFINITY, f32::max);
-                    let alpha = if in_window_max > f32::NEG_INFINITY {
-                        in_window_max.max(entry.static_alpha)
-                    } else {
-                        entry.static_alpha
-                    };
-                    alpha >= 0.5
-                }
-                _ => true,
-            };
-            godot_print!("MDX geoset {} kept={}", gidx, keep);
-            keep
+        .filter(|(gidx, _)| match (stand.as_ref(), model.geoset_alpha.get(*gidx)) {
+            (Some(stand_seq), Some(Some(entry))) => {
+                let sample_t = stand_seq.start_ms + (stand_seq.end_ms - stand_seq.start_ms) / 2;
+                let alpha = sample_alpha_at(entry, sample_t);
+                alpha >= 0.5
+            }
+            _ => true,
         })
         .collect();
 
@@ -162,17 +149,32 @@ pub fn build_mesh(model: &MdxModel) -> BuiltMesh {
     BuiltMesh { mesh, surface_textures }
 }
 
-fn alpha_in_window(entry: &GeosetAlpha, win_start_ms: u32, win_end_ms: u32) -> f32 {
-    let in_window: Vec<f32> = entry
-        .keys
-        .iter()
-        .filter(|(t, _)| *t >= win_start_ms && *t <= win_end_ms)
-        .map(|(_, a)| *a)
-        .collect();
-    if !in_window.is_empty() {
-        in_window.into_iter().fold(f32::NEG_INFINITY, f32::max)
-    } else {
-        entry.static_alpha
+/// Sample the geoset's alpha curve at time `t_ms`. Falls back to
+/// `static_alpha` only when the curve has no keys at all (WC3 default).
+fn sample_alpha_at(entry: &GeosetAlpha, t_ms: u32) -> f32 {
+    if entry.keys.is_empty() {
+        return entry.static_alpha;
+    }
+    // Find the bracketing keyframes; clamp at the ends.
+    let (mut prev, mut next): (Option<&(u32, f32)>, Option<&(u32, f32)>) = (None, None);
+    for k in &entry.keys {
+        if k.0 <= t_ms {
+            prev = Some(k);
+        }
+        if k.0 >= t_ms && next.is_none() {
+            next = Some(k);
+        }
+    }
+    match (prev, next) {
+        (Some(a), Some(b)) if a.0 == b.0 => a.1,
+        (Some(a), Some(b)) => {
+            let span = (b.0 - a.0) as f32;
+            let f = if span > 0.0 { (t_ms - a.0) as f32 / span } else { 0.0 };
+            a.1 + (b.1 - a.1) * f
+        }
+        (Some(a), None) => a.1,
+        (None, Some(b)) => b.1,
+        (None, None) => entry.static_alpha,
     }
 }
 
