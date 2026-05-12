@@ -10,6 +10,7 @@ mod hud;
 mod resource_node_visual;
 mod selection_manager;
 mod sim_bridge;
+mod sound_fx;
 mod terrain_node;
 mod unit_node;
 mod unit_portrait;
