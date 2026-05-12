@@ -208,4 +208,20 @@ impl SimBridge {
             sim.write_replay(&p);
         }
     }
+
+    /// Spawn `count` extra workers near the depot for stress testing.
+    /// Used from a debug binding (orchestrator will wire to a hotkey).
+    #[func]
+    pub fn spawn_workers(&mut self, count: u32) {
+        if let Some(sim) = &mut self.sim {
+            let depot = sim.players.get(0).and_then(|p| p.supply_depot)
+                .unwrap_or(game_core::Vec2::ZERO);
+            for i in 0..count {
+                let angle = i as f32 * 0.6;
+                let r = 5.0 + (i as f32 * 0.15);
+                let offset = game_core::Vec2::new(angle.cos() * r, angle.sin() * r);
+                sim.spawn_unit(0, depot + offset);
+            }
+        }
+    }
 }
