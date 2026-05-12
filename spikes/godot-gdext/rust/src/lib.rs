@@ -19,6 +19,7 @@ mod sound_fx;
 mod terrain_node;
 mod unit_node;
 mod unit_portrait;
+mod wc3_material;
 
 /// Extension entry point — called by Godot when the .gdextension is loaded.
 struct SpikGodotGdext;
