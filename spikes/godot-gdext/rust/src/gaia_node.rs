@@ -46,10 +46,11 @@ impl INode3D for GaiaNode {
     }
 
     fn ready(&mut self) {
-        let mut loader = ResourceLoader::singleton();
-        let model: Option<Gd<PackedScene>> = loader
-            .load("res://assets/models/wolf.glb")
-            .and_then(|r| r.try_cast::<PackedScene>().ok());
+        // TODO(20kbc): TimberWolf.glb extracted via PRD-21 has no applied
+        // texture — renders white. Capsule fallback until material wiring
+        // is fixed (probably needs material index alignment in mdx_to_gltf).
+        let _loader = ResourceLoader::singleton();
+        let model: Option<Gd<PackedScene>> = None;
 
         if let Some(scene) = model {
             if let Some(instance) = scene.instantiate() {
