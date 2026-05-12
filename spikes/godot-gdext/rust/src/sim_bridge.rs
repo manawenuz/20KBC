@@ -168,6 +168,17 @@ impl SimBridge {
         arr
     }
 
+    /// Returns the current resource amount for the given node id.
+    /// Returns -1 if the node is not found or has been depleted.
+    #[func]
+    pub fn get_resource_amount(&self, node_id: u32) -> i64 {
+        self.sim
+            .as_ref()
+            .and_then(|s| s.iter_resources().find(|n| n.id == node_id))
+            .map(|n| n.amount as i64)
+            .unwrap_or(-1)
+    }
+
     /// Order `unit_id` to gather from `node_id`. Forwards to CSimulation::issue_order.
     #[func]
     pub fn issue_gather_order(&mut self, unit_id: u32, node_id: u32) {

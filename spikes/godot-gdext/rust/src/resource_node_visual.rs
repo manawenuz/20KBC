@@ -1,6 +1,9 @@
 use godot::prelude::*;
-use godot::classes::{BoxMesh, MeshInstance3D, INode3D, Node3D, StandardMaterial3D};
+use godot::classes::{
+    BoxMesh, MeshInstance3D, INode3D, Node3D, StandardMaterial3D, ResourceLoader, PackedScene,
+};
 use godot::classes::base_material_3d::ShadingMode;
+use crate::sim_bridge::SimBridge;
 
 /// Wood colour — brown.
 const COLOR_WOOD: Color = Color {
@@ -26,21 +29,30 @@ const COLOR_UNKNOWN: Color = Color {
     a: 1.0,
 };
 
-/// A single resource node's visual representation: a 3D box placed in the world.
+/// A single resource node's visual representation: a 3D model placed in the world.
 ///
 /// `ResourceNode` is spawned by GDScript whenever the sim reports resource nodes.
 /// Its world position is set by GDScript to mirror `CResourceNode::pos`.
+///
+/// - Wood uses `res://assets/models/tree.glb` with a tip-over animation on depletion.
+/// - Stone uses `res://assets/models/stone.glb`.
+/// - If a model is missing, a coloured BoxMesh is used as fallback.
 #[derive(GodotClass)]
 #[class(base = Node3D)]
 pub struct ResourceNode {
-    /// 1 = Wood (brown), 2 = Stone (grey). Set BEFORE adding to scene tree
-    /// so ready() picks the right color.
+    /// 1 = Wood (tree), 2 = Stone (outcrop). Set BEFORE adding to scene tree
+    /// so ready() picks the right model.
     #[var]
     pub kind: u32,
     /// Sim-side ResourceNodeId — used to correlate right-click → gather order.
     #[var]
     pub node_id: u32,
     base: Base<Node3D>,
+    last_amount: i64,
+    falling: bool,
+    fall_timer: f32,
+    mesh: Option<Gd<Node3D>>,
+    sim_bridge: Option<Gd<SimBridge>>,
 }
 
 #[godot_api]
@@ -50,15 +62,85 @@ impl INode3D for ResourceNode {
             kind: 0,
             node_id: 0,
             base,
+            last_amount: -1,
+            falling: false,
+            fall_timer: 0.0,
+            mesh: None,
+            sim_bridge: None,
         }
     }
 
     fn ready(&mut self) {
-        // Build box mesh (1.5 × 1.5 × 1.5).
+        // Try to load a GLB model based on kind.
+        let model_path = match self.kind {
+            1 => "res://assets/models/tree.glb",
+            2 => "res://assets/models/stone.glb",
+            _ => {
+                self.build_fallback_mesh();
+                return;
+            }
+        };
+
+        let mut loader = ResourceLoader::singleton();
+        let packed = loader
+            .load(model_path)
+            .and_then(|r| r.try_cast::<PackedScene>().ok());
+
+        if let Some(ps) = packed {
+            let instance = ps.instantiate();
+            if let Some(node) = instance {
+                if let Ok(node3d) = node.try_cast::<Node3D>() {
+                    self.base_mut().add_child(&node3d);
+                    self.mesh = Some(node3d);
+                    self.sim_bridge = self.find_sim_bridge();
+                    return;
+                }
+            }
+        }
+
+        // Model missing or failed to load — use the coloured box fallback.
+        self.build_fallback_mesh();
+    }
+
+    fn process(&mut self, delta: f64) {
+        let dt = delta as f32;
+
+        // If already tipping over, advance the animation.
+        if self.falling {
+            self.fall_timer += dt;
+            let t = self.fall_timer.min(1.0);
+            let angle = std::f32::consts::FRAC_PI_2 * t; // 90° in radians
+            if let Some(ref mut mesh) = self.mesh {
+                mesh.set_rotation(Vector3::new(angle, 0.0, 0.0));
+            }
+            if self.fall_timer >= 1.0 {
+                self.base_mut().queue_free();
+            }
+            return;
+        }
+
+        // Poll sim bridge for depletion.
+        let amount = self
+            .sim_bridge
+            .as_ref()
+            .map(|b| b.bind().get_resource_amount(self.node_id))
+            .unwrap_or(-1);
+
+        if self.last_amount > 0 && amount <= 0 && self.kind == 1 {
+            self.falling = true;
+            self.fall_timer = 0.0;
+        }
+
+        self.last_amount = amount;
+    }
+}
+
+impl ResourceNode {
+    /// Build the legacy coloured BoxMesh fallback.
+    fn build_fallback_mesh(&mut self) {
         let mut box_mesh = BoxMesh::new_gd();
         box_mesh.set_size(Vector3::new(1.5, 1.5, 1.5));
 
-        // Choose colour by kind.
         let color = match self.kind {
             1 => COLOR_WOOD,
             2 => COLOR_STONE,
@@ -70,13 +152,23 @@ impl INode3D for ResourceNode {
         mat.set_shading_mode(ShadingMode::PER_PIXEL);
         box_mesh.surface_set_material(0, &mat);
 
-        // Attach as a child MeshInstance3D so the resource node's transform
-        // controls world position while the mesh stays at local origin.
         let mut mesh_inst = MeshInstance3D::new_alloc();
         mesh_inst.set_mesh(&box_mesh);
         // Offset upward by half height so the box sits on y=0.
         mesh_inst.set_position(Vector3::new(0.0, 0.75, 0.0));
 
         self.base_mut().add_child(&mesh_inst);
+        self.mesh = Some(mesh_inst.upcast::<Node3D>());
+        self.sim_bridge = self.find_sim_bridge();
+    }
+
+    /// Walk up the tree to find the SimBridge node (sibling of our grandparent).
+    fn find_sim_bridge(&self) -> Option<Gd<SimBridge>> {
+        let parent = self.base().get_parent()?;
+        let grandparent = parent.get_parent()?;
+        grandparent
+            .get_node_or_null("SimBridge")?
+            .try_cast::<SimBridge>()
+            .ok()
     }
 }
