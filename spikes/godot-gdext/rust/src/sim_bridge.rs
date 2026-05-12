@@ -89,6 +89,17 @@ impl SimBridge {
         arr
     }
 
+    /// Facing direction of a unit in radians. Sim convention: facing is
+    /// atan2(dz, dx) on the world XZ plane — 0 = +X (east), π/2 = +Z (south).
+    /// Returns 0.0 if unit not found.
+    #[func]
+    pub fn get_unit_facing(&self, unit_id: u32) -> f32 {
+        self.sim.as_ref()
+            .and_then(|s| s.iter_units().find(|u| u.id == unit_id))
+            .map(|u| u.facing)
+            .unwrap_or(0.0)
+    }
+
     /// Wood owned by player 0.
     #[func]
     pub fn get_wood(&self) -> u32 {

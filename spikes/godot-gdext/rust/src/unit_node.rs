@@ -56,6 +56,8 @@ pub struct UnitNode {
     prev_behavior: i64,
     behavior_poll: u32,
     anim_map: [Option<String>; 4],
+    current_facing: f32,
+    facing_initialized: bool,
 }
 
 #[godot_api]
@@ -75,6 +77,8 @@ impl INode3D for UnitNode {
             prev_behavior: -1,
             behavior_poll: 0,
             anim_map: [None, None, None, None],
+            current_facing: 0.0,
+            facing_initialized: false,
         }
     }
 
@@ -174,6 +178,34 @@ impl INode3D for UnitNode {
                 }
             }
         }
+
+        // Smoothly turn toward the sim's facing direction.
+        // Sim convention: facing = atan2(dz, dx), so 0 = +X. We map that to a
+        // Godot Y-axis rotation of -facing (Godot's positive Y rotation goes
+        // from +X toward -Z, i.e. clockwise looking down — opposite of math).
+        let target_facing = self
+            .find_sim_bridge()
+            .map(|sim| sim.bind().get_unit_facing(self.unit_id))
+            .unwrap_or(0.0);
+        if !self.facing_initialized {
+            self.current_facing = target_facing;
+            self.facing_initialized = true;
+        } else {
+            const TAU: f32 = std::f32::consts::TAU;
+            const PI: f32 = std::f32::consts::PI;
+            let mut diff = (target_facing - self.current_facing).rem_euclid(TAU);
+            if diff > PI {
+                diff -= TAU;
+            }
+            // 8 rad/s turn rate (~1.3 full turns/s) — fast but visible.
+            let step = (8.0 * dt).min(diff.abs());
+            self.current_facing += diff.signum() * step;
+        }
+        let yaw = -self.current_facing;
+        let mut base = self.base_mut();
+        let mut rot = base.get_rotation();
+        rot.y = yaw;
+        base.set_rotation(rot);
     }
 }
 
