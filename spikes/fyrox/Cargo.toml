@@ -1,0 +1,14 @@
+[package]
+name = "spike-fyrox"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "spike-fyrox"
+path = "src/main.rs"
+
+[dependencies]
+# Fyrox 0.34 — if this version does not exist on crates.io, try "0.33".
+# The plan also references Fyrox 1.0; check `cargo search fyrox` to confirm latest.
+fyrox = "0.33"
+game-core = { path = "../../game-core" }

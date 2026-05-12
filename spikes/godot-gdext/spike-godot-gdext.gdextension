@@ -1,0 +1,11 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.3"
+
+[libraries]
+macos.debug = "res://rust/target/debug/libspike_godot_gdext.dylib"
+macos.release = "res://rust/target/release/libspike_godot_gdext.dylib"
+linux.debug = "res://rust/target/debug/libspike_godot_gdext.so"
+linux.release = "res://rust/target/release/libspike_godot_gdext.so"
+windows.debug = "res://rust/target/debug/spike_godot_gdext.dll"
+windows.release = "res://rust/target/release/spike_godot_gdext.dll"

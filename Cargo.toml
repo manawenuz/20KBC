@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "game-core",
+    "spikes/bevy",
+    "spikes/fyrox",
+]
+resolver = "2"

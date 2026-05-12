@@ -1,0 +1,27 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; but this file is kept human-readable for version control.
+
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.3"
+config_version = 4
+
+[application]
+
+config/name = "20KBC — Godot Spike"
+run/main_scene = "res://scenes/Main.tscn"
+
+[display]
+
+window/size/viewport_width = 1280
+window/size/viewport_height = 720
+
+[physics]
+
+common/physics_ticks_per_second = 20
+
+[rendering]
+
+renderer/rendering_method = "forward_plus"
+environment/defaults/default_clear_color = Color(0.15, 0.12, 0.08, 1)

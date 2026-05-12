@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3 uid="uid://bc20k_main"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="SimBridge" type="Node" parent="."]
+script = "SimBridge"
+
+[node name="TerrainNode" type="MeshInstance3D" parent="."]
+script = "TerrainNode"
+
+[node name="RtsCameraController" type="Camera3D" parent="."]
+script = "RtsCameraController"
+current = true
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.353, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 60, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="GameHud" type="Control" parent="CanvasLayer"]
+script = "GameHud"
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="WoodLabel" type="Label" parent="CanvasLayer/GameHud"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 200.0
+offset_bottom = 40.0
+text = "Wood: 0"
+
+[node name="StoneLabel" type="Label" parent="CanvasLayer/GameHud"]
+offset_left = 16.0
+offset_top = 44.0
+offset_right = 200.0
+offset_bottom = 68.0
+text = "Stone: 0"
+
+[node name="Units" type="Node3D" parent="."]
