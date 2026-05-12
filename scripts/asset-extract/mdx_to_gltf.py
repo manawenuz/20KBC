@@ -604,29 +604,24 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     sequences = mdx_data.get("sequences", [])
     geoset_alpha = mdx_data.get("geoset_alpha", {})
 
-    # Find the unit's Stand sequence — its "default visible" state. WC3
-    # KGAO tracks are typically sequence-local in usage even if they span
-    # the whole timeline, so we ask: does this geoset have any keyframe
-    # with alpha>=0.5 inside the Stand window? If yes, keep. If no, fall
-    # back to static_alpha. This correctly keeps wolf body geosets (whose
-    # only KGAO key is at the Decay Bone sequence with alpha=0) while
-    # still dropping peasant's Lumber bundle (which has alpha=0 across
-    # all Stand sequences and only flips on during carry-state events).
-    if sequences:
-        stand = next((s for s in sequences if s.name.lower().startswith("stand")), sequences[0])
-        stand_start, stand_end = stand.start_ms, stand.end_ms
-    else:
-        stand_start, stand_end = 0, 1000
-
+    # Drop only geosets that are ALWAYS hidden (static_alpha < 0.5 AND no
+    # keyframe anywhere with alpha >= 0.5). The previous Stand-window
+    # filter dropped the peasant's body+head along with the lumber prop
+    # because WC3 puts visibility keys at Decay-time, leaving Stand-time
+    # alpha = static_alpha = 0 even for permanently-visible body parts.
+    # Less aggressive: keep anything that's visible somewhere on the
+    # timeline. We can re-tighten once we have a proper alt-geoset
+    # toggle mechanism in Godot.
     if geoset_alpha:
         kept_geosets = []
         for gidx, g in enumerate(geosets):
             entry = geoset_alpha.get(gidx)
             if entry is None:
-                kept_geosets.append(g)  # No GEOA = always visible
+                kept_geosets.append(g)  # No GEOA entry → always visible
                 continue
-            alpha = _alpha_in_window(entry, stand_start, stand_end)
-            if alpha >= 0.5:
+            static_a = entry.get("static", 1.0)
+            max_kf_a = max((a for _t, a in entry.get("keys", [])), default=0.0)
+            if static_a >= 0.5 or max_kf_a >= 0.5:
                 kept_geosets.append(g)
         geosets = kept_geosets
 

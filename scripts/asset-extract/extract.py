@@ -248,9 +248,13 @@ def main() -> int:
                 "units/creeps/timberwolf/timberwolf.mdx:wolf.glb",
                 "doodads/terrain/ashentree/ashentree0.mdx:ashentree.glb",
                 "doodads/terrain/rockchunks/rockchunks0.mdx:rockchunks.glb",
-                "buildings/human/townhall/townhall.mdx:townhall.glb",
+                # User-preferred visual mapping (not WC3 canonical):
+                # AltarOfKings (gold throne + blue banner) reads as our "townhall"
+                # TownHall (peaked red roof) reads as our "castle"
+                # HumanBarracks stays as "keep"
+                "buildings/human/altarofkings/altarofkings.mdx:townhall.glb",
                 "buildings/human/humanbarracks/humanbarracks.mdx:keep.glb",
-                "buildings/human/altarofkings/altarofkings.mdx:castle.glb",
+                "buildings/human/townhall/townhall.mdx:castle.glb",
                 "doodads/terrain/lordaerontree/lordaerontree0.mdx:lordaerontree.glb",
             ]
 
