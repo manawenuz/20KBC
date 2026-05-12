@@ -1,5 +1,6 @@
 use godot::prelude::*;
 
+mod blp;
 mod box_selector;
 mod building_node;
 mod camera_controller;
