@@ -1,5 +1,5 @@
 use godot::prelude::*;
-use game_core::{CSimulation, SimConfig, Order};
+use game_core::{BehaviorState, CSimulation, SimConfig, Order};
 
 /// `SimBridge` is the Godot-facing wrapper around the pure-Rust `CSimulation`.
 ///
@@ -313,5 +313,21 @@ impl SimBridge {
         self.sim.as_ref()
             .and_then(|s| s.iter_units().find(|u| u.id == unit_id))
             .map(|u| u.hp).unwrap_or(-1.0)
+    }
+
+    /// Returns the behavior state of the unit as an integer code:
+    /// 0 = Idle/Dead, 1 = MovingTo, 2 = Gathering, 3 = Attacking.
+    #[func]
+    pub fn get_unit_behavior(&self, unit_id: u32) -> i64 {
+        self.sim
+            .as_ref()
+            .and_then(|s| s.iter_units().find(|u| u.id == unit_id))
+            .map(|u| match &u.behavior {
+                BehaviorState::Idle | BehaviorState::Dead => 0,
+                BehaviorState::MovingTo { .. } => 1,
+                BehaviorState::Gathering { .. } => 2,
+                BehaviorState::Attacking { .. } => 3,
+            })
+            .unwrap_or(0)
     }
 }
