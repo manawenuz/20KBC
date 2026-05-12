@@ -224,4 +224,23 @@ impl SimBridge {
             }
         }
     }
+
+    /// Issue a formation move order to a group of units.
+    ///
+    /// Distributes the units in concentric rings around the target point
+    /// so they don't all clump at the same coordinate.
+    #[func]
+    pub fn issue_formation_move(&mut self, unit_ids: Array<i64>, x: f32, z: f32) {
+        use game_core::formation::formation_positions;
+        let center = game_core::Vec2::new(x, z);
+        let n = unit_ids.len();
+        let slots = formation_positions(center, n, 2.0);
+        if let Some(sim) = &mut self.sim {
+            for (i, raw) in unit_ids.iter_shared().enumerate() {
+                let uid = raw as u32;
+                let pos = slots.get(i).copied().unwrap_or(center);
+                sim.issue_order(uid, game_core::Order::Move { target: pos });
+            }
+        }
+    }
 }
