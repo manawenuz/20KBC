@@ -43,6 +43,18 @@ All 4 landed: 10 workers, day/night, replay-on-quit, stress + frame-time HUD.
 | 15 | Combat feedback FX | `.worktrees/prd-15-combat-fx` | pending |
 | 16 | Selected-unit portrait HUD | `.worktrees/prd-16-portrait` | pending |
 
+## Batch 7 (Warsmash-style runtime asset pipeline — pivot)
+
+| ID | Title | Wave | Status |
+|----|-------|------|--------|
+| 30 | Runtime MPQ reader | 1 | pending |
+| 31 | Runtime BLP decoder | 1 | pending |
+| 32 | Runtime MDX parser → ArrayMesh | 1 | pending |
+| 33 | WC3 multi-layer material shader | 1 | pending |
+| 34 | Runtime skin + animation (depends on 32) | 2 | pending |
+| 35 | Team-color substitution (depends on 30, 31, 33) | 2 | pending |
+| 36 | UnitNode/BuildingNode integration (depends on all) | 3 | pending |
+
 ## Batch 6 (buildings + tree model + wolf revert)
 
 | ID | Title | Wave | Status |
