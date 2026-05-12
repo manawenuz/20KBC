@@ -5,6 +5,7 @@ mod gaia_node;
 mod hud;
 mod sim_bridge;
 mod terrain_node;
+mod resource_node_visual;
 mod unit_node;
 
 /// Extension entry point — called by Godot when the .gdextension is loaded.
