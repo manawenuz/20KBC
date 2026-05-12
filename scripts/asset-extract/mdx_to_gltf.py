@@ -800,7 +800,10 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
             "translation": [local_translation[0], local_translation[1], local_translation[2]],
         }
         if joint_children[joint_idx]:
-            node["children"] = joint_children[joint_idx]
+            # joint_children holds JOINT indices; glTF "children" expects
+            # NODE indices. Bones live at node indices [1 .. 1+len(bones)]
+            # (mesh node is at 0), so offset by 1.
+            node["children"] = [1 + c for c in joint_children[joint_idx]]
         bone_nodes.append(node)
 
     # Build inverse bind matrices
