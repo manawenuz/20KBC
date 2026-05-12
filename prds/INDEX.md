@@ -43,6 +43,16 @@ All 4 landed: 10 workers, day/night, replay-on-quit, stress + frame-time HUD.
 | 15 | Combat feedback FX | `.worktrees/prd-15-combat-fx` | pending |
 | 16 | Selected-unit portrait HUD | `.worktrees/prd-16-portrait` | pending |
 
+## Batch 6 (buildings + tree model + wolf revert)
+
+| ID | Title | Wave | Status |
+|----|-------|------|--------|
+| 25 | Extract Townhall/Keep/Castle MDX | 1 | pending |
+| 26 | Buildings in game-core + SimBridge | 1 | pending |
+| 28 | Real WC3 tree model in ResourceNode | 1 | pending |
+| 29 | Wolf revert to red capsule | 1 | pending |
+| 27 | BuildingNode visual + scene wire | 2 (after 25/26) | pending |
+
 ## Batch 5 (path A: full MDX extraction — serial waves)
 
 | ID | Title | Wave | Status |
