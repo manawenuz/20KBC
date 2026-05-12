@@ -270,6 +270,54 @@ def _parse_track_data(node_data: bytes, track_offset: int, track_tag: str):
     return keyframes, track_byte_length
 
 
+def _parse_geoset_animations(chunk_data: bytes) -> dict:
+    """Parse GEOA entries — returns {geoset_id: first_frame_alpha}.
+
+    WC3 'alternate' geosets (like a peasant's carried-lumber prop) get an
+    alpha of 0 here so they stay hidden until a gameplay event triggers
+    them. We use this to skip those geosets from glTF output entirely
+    so they don't appear glued onto the unit at rest.
+    """
+    geoset_alpha = {}
+    i = 0
+    while i + 28 <= len(chunk_data):
+        size = int.from_bytes(chunk_data[i:i + 4], "little")
+        if size < 28 or i + size > len(chunk_data):
+            break
+        static_alpha = struct.unpack("<f", chunk_data[i + 4:i + 8])[0]
+        # flags (4) + static color (12) = 16 bytes, then geoset_id
+        geoset_id = int.from_bytes(chunk_data[i + 24:i + 28], "little")
+
+        # Default to static alpha; KGAO track (if present) overrides.
+        first_alpha = static_alpha
+
+        # Walk any tracks after the fixed header to find KGAO.
+        track_off = 28
+        while track_off + 16 <= size:
+            tag = chunk_data[i + track_off:i + track_off + 4].decode("ascii", errors="replace")
+            count = int.from_bytes(chunk_data[i + track_off + 4:i + track_off + 8], "little")
+            interp = int.from_bytes(chunk_data[i + track_off + 8:i + track_off + 12], "little")
+            # global_seq_id at +12..+16 (signed int)
+            if tag == "KGAO":
+                # Scalar track: per-keyframe = time(4) + alpha(4); hermite adds 8 bytes of tangents.
+                kf_size = 8 if interp in (0, 1) else 16
+                data_off = i + track_off + 16
+                if count > 0 and data_off + kf_size <= len(chunk_data):
+                    first_alpha = struct.unpack("<f", chunk_data[data_off + 4:data_off + 8])[0]
+                track_off += 16 + count * kf_size
+            elif tag in ("KGAC",):
+                # Vec3 track: time(4) + 3f(12); hermite adds 24 bytes.
+                kf_size = 16 if interp in (0, 1) else 40
+                track_off += 16 + count * kf_size
+            else:
+                break
+
+        geoset_alpha[geoset_id] = first_alpha
+        i += size
+
+    return geoset_alpha
+
+
 def _parse_bone_nodes(chunk_data: bytes) -> list:
     """Parse BONE chunk entries including animation tracks."""
     bones = []
@@ -321,6 +369,7 @@ def parse_mdx(data: bytes) -> dict:
     helpers = []
     pivots = []
     sequences = []
+    geoset_alpha = {}
 
     offset = 4
     while offset < len(data):
@@ -479,6 +528,12 @@ def parse_mdx(data: bytes) -> dict:
             # disconnected roots and the skin falls apart.
             helpers = _parse_bone_nodes(chunk_data)
 
+        elif chunk_id == "GEOA":
+            # Per-geoset alpha/color. We extract first-frame alpha so we can
+            # skip alternate ("hidden by default") geosets like the
+            # carried-lumber bundle.
+            geoset_alpha = _parse_geoset_animations(chunk_data)
+
         elif chunk_id == "PIVT":
             count = len(chunk_data) // 12
             for i in range(count):
@@ -506,6 +561,7 @@ def parse_mdx(data: bytes) -> dict:
         "helpers": helpers,
         "pivots": pivots,
         "sequences": sequences,
+        "geoset_alpha": geoset_alpha,
     }
 
 
@@ -534,6 +590,21 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     helpers = mdx_data.get("helpers", [])
     pivots = mdx_data.get("pivots", [])
     sequences = mdx_data.get("sequences", [])
+    geoset_alpha = mdx_data.get("geoset_alpha", {})
+
+    # Drop alternate geosets that GEOA hides at rest (alpha < 0.5 at frame 0).
+    # WC3 uses these for carried props (peasant's lumber bundle, gold bag),
+    # which should appear only after gameplay events flag them visible.
+    if geoset_alpha:
+        kept_geosets = []
+        for gidx, g in enumerate(geosets):
+            alpha = geoset_alpha.get(gidx, 1.0)
+            if alpha >= 0.5:
+                kept_geosets.append(g)
+            else:
+                # Skip hidden-by-default geoset.
+                pass
+        geosets = kept_geosets
 
     # all_nodes = bones first, then helpers. Bones keep their indices [0..len(bones))
     # so the existing animation/skin code that targets node index = 1 + bone_index

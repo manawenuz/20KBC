@@ -100,6 +100,11 @@ impl INode3D for UnitNode {
                 self.base_mut().add_child(&instance);
                 if let Some(mut anim) = Self::find_anim_player(&instance) {
                     self.anim_map = Self::build_anim_map(&anim);
+                    // Force loop on idle/walk/work animations. glTF doesn't
+                    // carry a per-animation loop flag from the MDX SEQS chunk
+                    // so by default Godot plays them once; we'd then see
+                    // the peasant walk two steps and slide.
+                    Self::set_loop_modes(&mut anim);
                     if let Some(ref idle) = self.anim_map[0] {
                         anim.play_ex().name(idle.as_str()).done();
                     }
@@ -312,6 +317,27 @@ impl UnitNode {
             Self::resolve_anim(anim, &["Attack - 1", "Attack", "attack"]),
             Self::resolve_anim(anim, &["Stand Work", "Stand", "Walk"]),
         ]
+    }
+
+    /// Mark the looping WC3 animations as LOOP_LINEAR so they don't stop
+    /// after one play (causing the peasant to walk two steps and slide).
+    /// MDX SEQS has a per-sequence no_loop flag but glTF can't carry it,
+    /// so we apply the convention here: Stand* and Walk* loop, others don't.
+    fn set_loop_modes(anim: &mut Gd<AnimationPlayer>) {
+        use godot::classes::animation::LoopMode;
+        let names = anim.get_animation_list();
+        for i in 0..names.len() {
+            let nm = names.get(i).unwrap_or_default().to_string();
+            let lower = nm.to_lowercase();
+            let should_loop = lower.starts_with("stand")
+                || lower.starts_with("walk")
+                || lower.starts_with("run");
+            if should_loop {
+                if let Some(mut a) = anim.get_animation(nm.as_str()) {
+                    a.set_loop_mode(LoopMode::LINEAR);
+                }
+            }
+        }
     }
 
     fn find_sim_bridge(&self) -> Option<Gd<crate::sim_bridge::SimBridge>> {
