@@ -368,4 +368,17 @@ impl SimBridge {
             })
             .unwrap_or(0)
     }
+
+    /// Returns building data as `Array<Vector4>` packed as
+    /// `(kind as f32, x, z, rotation_radians)` per building.
+    #[func]
+    pub fn get_buildings(&self) -> Array<Vector4> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for b in &sim.buildings {
+                arr.push(Vector4::new(b.kind as u32 as f32, b.pos.x, b.pos.y, b.rotation));
+            }
+        }
+        arr
+    }
 }

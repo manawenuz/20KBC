@@ -1,3 +1,4 @@
+pub mod building;
 pub mod config;
 pub mod formation;
 pub mod gaia;
@@ -14,6 +15,7 @@ pub mod unit;
 pub use glam::Vec2;
 
 // Re-export the public surface the spec requires.
+pub use building::{BuildingKind, CBuilding};
 pub use config::SimConfig;
 pub use formation::formation_positions;
 pub use gaia::CGaiaEntity;
