@@ -26,6 +26,19 @@ pub struct LayerSpec {
     pub filter:  FilterMode,
     pub unshaded: bool,           // MDL "Unshaded" flag
     pub two_sided: bool,          // MDL "TwoSided" flag
+    pub team_color_slot: Option<u8>, // None = use texture as-is; Some(slot) = substitute at material build time
+}
+
+impl LayerSpec {
+    pub fn new(texture: Gd<Texture2D>, filter: FilterMode) -> Self {
+        Self {
+            texture,
+            filter,
+            unshaded: false,
+            two_sided: false,
+            team_color_slot: None,
+        }
+    }
 }
 
 /// Build a `ShaderMaterial` parameterised with up to 4 layers.
