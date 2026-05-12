@@ -268,4 +268,24 @@ impl SimBridge {
                 .map(|u| u.id as i64)
         }).unwrap_or(-1)
     }
+
+    /// Returns UnitIds of all living units whose world XZ position is inside
+    /// the axis-aligned rectangle [min_x, max_x] × [min_z, max_z].
+    #[func]
+    pub fn get_units_in_rect(&self, min_x: f32, min_z: f32, max_x: f32, max_z: f32) -> Array<i64> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for unit in sim.iter_units() {
+                if !unit.is_dead
+                    && unit.pos.x >= min_x
+                    && unit.pos.x <= max_x
+                    && unit.pos.y >= min_z
+                    && unit.pos.y <= max_z
+                {
+                    arr.push(unit.id as i64);
+                }
+            }
+        }
+        arr
+    }
 }
