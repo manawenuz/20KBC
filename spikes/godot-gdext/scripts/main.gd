@@ -9,6 +9,19 @@ extends Node3D
 @onready var camera: Camera3D = $RtsCameraController
 @onready var sel_count_label: Label = $CanvasLayer/GameHud/SelectionCountLabel
 
+const REPLAY_PATH := "user://replay.bin"
+
+func _ready() -> void:
+    # Save replay on window close.
+    get_tree().set_auto_accept_quit(false)
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_WM_CLOSE_REQUEST:
+        if sim != null:
+            sim.save_replay(REPLAY_PATH)
+            print("Replay saved to ", REPLAY_PATH)
+        get_tree().quit()
+
 # id-keyed dictionaries. Stable across the sim's lifetime.
 var unit_nodes: Dictionary = {}   # int unit_id -> UnitNode
 var gaia_nodes: Dictionary = {}   # int gaia_id -> GaiaNode (best-effort: index-keyed for now)
@@ -107,6 +120,10 @@ func _input(event: InputEvent) -> void:
             _handle_left_click(event.position)
         elif event.button_index == MOUSE_BUTTON_RIGHT:
             _handle_right_click(event.position)
+    elif event is InputEventKey and event.pressed and not event.echo:
+        # Stress-test hotkey: G spawns 40 extra workers.
+        if event.keycode == KEY_G:
+            sim.spawn_workers(40)
 
 func _ray_hit_ground(screen_pos: Vector2) -> Vector3:
     var origin: Vector3 = camera.project_ray_origin(screen_pos)

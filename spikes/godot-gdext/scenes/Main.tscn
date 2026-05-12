@@ -18,6 +18,10 @@ transform = Transform3D(0.866, -0.353, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.6
 light_energy = 1.2
 shadow_enabled = true
 
+[node name="DayNightController" type="DayNightController" parent="."]
+sun_path = NodePath("../Sun")
+cycle_seconds = 600.0
+
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
 [node name="GameHud" type="GameHud" parent="CanvasLayer"]
@@ -44,6 +48,20 @@ offset_top = 72.0
 offset_right = 300.0
 offset_bottom = 96.0
 text = "Selected: 0"
+
+[node name="FrameTimeLabel" type="FrameTimeLabel" parent="CanvasLayer"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -220.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 40.0
+
+[node name="Label" type="Label" parent="CanvasLayer/FrameTimeLabel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = "FPS: --"
+horizontal_alignment = 2
 
 [node name="Units" type="Node3D" parent="."]
 
