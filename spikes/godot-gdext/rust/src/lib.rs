@@ -1,5 +1,6 @@
 use godot::prelude::*;
 
+mod box_selector;
 mod camera_controller;
 mod day_night;
 mod frame_time_label;
