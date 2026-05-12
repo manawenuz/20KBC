@@ -209,6 +209,23 @@ impl SimBridge {
         }
     }
 
+    /// Returns unit stats as `[hp, max_hp, supply, max_supply]` (Array<f64>).
+    /// Returns an empty array if the unit doesn't exist.
+    /// (Flat array used instead of Dictionary to avoid gdext generic constraints.)
+    #[func]
+    pub fn get_unit_stats(&self, unit_id: u32) -> Array<f64> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            if let Some(u) = sim.iter_units().find(|u| u.id == unit_id) {
+                arr.push(u.hp as f64);
+                arr.push(u.max_hp as f64);
+                arr.push(u.supply as f64);
+                arr.push(u.max_supply as f64);
+            }
+        }
+        arr
+    }
+
     /// Spawn `count` extra workers near the depot for stress testing.
     /// Used from a debug binding (orchestrator will wire to a hotkey).
     #[func]
