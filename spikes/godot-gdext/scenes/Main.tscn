@@ -7,6 +7,8 @@ script = ExtResource("1_main")
 
 [node name="SimBridge" type="SimBridge" parent="."]
 
+[node name="SelectionManager" type="SelectionManager" parent="."]
+
 [node name="TerrainNode" type="TerrainNode" parent="."]
 
 [node name="RtsCameraController" type="RtsCameraController" parent="."]
@@ -36,4 +38,15 @@ offset_right = 200.0
 offset_bottom = 68.0
 text = "Stone: 0"
 
+[node name="SelectionCountLabel" type="Label" parent="CanvasLayer/GameHud"]
+offset_left = 16.0
+offset_top = 72.0
+offset_right = 300.0
+offset_bottom = 96.0
+text = "Selected: 0"
+
 [node name="Units" type="Node3D" parent="."]
+
+[node name="Resources" type="Node3D" parent="."]
+
+[node name="Gaia" type="Node3D" parent="."]

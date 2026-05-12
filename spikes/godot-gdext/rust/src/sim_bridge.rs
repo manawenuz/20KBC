@@ -58,14 +58,8 @@ impl SimBridge {
         }
     }
 
-    /// Returns unit positions as a flat `Array<f32>`: [x0, z0, x1, z1, …].
-    ///
-    /// Using `Vector2` to pair (x, z) per unit keeps GDScript side simple:
-    ///   ```gdscript
-    ///   var positions: Array[Vector2] = sim.get_unit_positions()
-    ///   for v in positions:
-    ///       unit_nodes[i].position = Vector3(v.x, 0, v.y)
-    ///   ```
+    /// Returns unit positions as a flat `Array<Vector2>`: [(x, z), …].
+    /// Order matches `get_unit_ids()`.
     #[func]
     pub fn get_unit_positions(&self) -> Array<Vector2> {
         let mut arr = Array::new();
@@ -73,6 +67,22 @@ impl SimBridge {
             for unit in sim.iter_units() {
                 if !unit.is_dead {
                     arr.push(Vector2::new(unit.pos.x, unit.pos.y));
+                }
+            }
+        }
+        arr
+    }
+
+    /// Returns the stable UnitIds of all living units, aligned with
+    /// `get_unit_positions()`. Use this to key UnitNode dictionaries on the
+    /// GDScript side so dead units leave gaps cleanly.
+    #[func]
+    pub fn get_unit_ids(&self) -> Array<i64> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for unit in sim.iter_units() {
+                if !unit.is_dead {
+                    arr.push(unit.id as i64);
                 }
             }
         }

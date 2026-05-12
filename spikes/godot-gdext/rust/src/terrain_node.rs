@@ -1,30 +1,18 @@
 use godot::prelude::*;
-use godot::classes::{ArrayMesh, MeshInstance3D, IMeshInstance3D};
+use godot::classes::{
+    ArrayMesh, IMeshInstance3D, ImageTexture, MeshInstance3D, ResourceLoader,
+    StandardMaterial3D, Texture2D,
+};
+use godot::classes::base_material_3d::ShadingMode;
 use godot::classes::mesh::PrimitiveType;
 
-/// Grass green (even tiles).
-const COLOR_GRASS: Color = Color {
-    r: 0.29,
-    g: 0.56,
-    b: 0.20,
-    a: 1.0,
-};
-
-/// Dirt brown (odd tiles).
-const COLOR_DIRT: Color = Color {
-    r: 0.55,
-    g: 0.40,
-    b: 0.24,
-    a: 1.0,
-};
-
-/// Flat 64×64 terrain rendered as a single `ArrayMesh` using vertex colours.
-/// Each tile is 2.0 world-units wide, matching the pathfinder cell size from
-/// `SimConfig::default()` (`tile_size = 2.0`).
+/// Flat 64×64 terrain rendered as a single `ArrayMesh` with the WC3 grass
+/// texture tiled across it. Each tile is 2.0 world-units wide, matching the
+/// pathfinder cell size from `SimConfig::default()` (`tile_size = 2.0`).
 ///
-/// We build one quad (two triangles) per tile and colour it alternately
-/// grass/dirt so the checkerboard gives immediate spatial feedback without
-/// needing any texture assets.
+/// The terrain mesh carries UVs so the WC3 grass atlas tiles cleanly. The
+/// previous vertex-color checkerboard is gone — the texture now provides
+/// visual feedback.
 #[derive(GodotClass)]
 #[class(base = MeshInstance3D)]
 pub struct TerrainNode {
@@ -40,6 +28,25 @@ impl IMeshInstance3D for TerrainNode {
     fn ready(&mut self) {
         let mesh = self.build_terrain_mesh();
         self.base_mut().set_mesh(&mesh);
+
+        // Load the extracted WC3 grass texture and apply as albedo.
+        let mut loader = ResourceLoader::singleton();
+        let tex: Option<Gd<Texture2D>> = loader
+            .load("res://assets/textures/ground_grass.png")
+            .and_then(|r| r.try_cast::<Texture2D>().ok());
+
+        let mut mat = StandardMaterial3D::new_gd();
+        mat.set_shading_mode(ShadingMode::PER_PIXEL);
+        if let Some(t) = tex {
+            mat.set_texture(godot::classes::base_material_3d::TextureParam::ALBEDO, &t);
+        } else {
+            // Fallback: flat green.
+            mat.set_albedo(Color { r: 0.29, g: 0.56, b: 0.20, a: 1.0 });
+            godot_warn!("ground_grass.png not found — using flat green fallback");
+        }
+        self.base_mut().set_surface_override_material(0, &mat);
+        // Silence unused-import warning when no texture loaded.
+        let _ = ImageTexture::new_gd;
     }
 }
 
@@ -49,10 +56,9 @@ impl TerrainNode {
         const GRID: u32 = 64;
         const TILE: f32 = 2.0;
 
-        // 64×64 tiles × 2 triangles × 3 verts = 24 576 vertices total.
         let mut positions = PackedVector3Array::new();
-        let mut colors = PackedColorArray::new();
         let mut normals = PackedVector3Array::new();
+        let mut uvs = PackedVector2Array::new();
 
         let up = Vector3::UP;
 
@@ -63,39 +69,36 @@ impl TerrainNode {
                 let x1 = x0 + TILE;
                 let z1 = z0 + TILE;
 
-                let color = if (x + z) % 2 == 0 { COLOR_GRASS } else { COLOR_DIRT };
+                // Each tile maps UV 0-1 onto the grass texture. Texture content
+                // is a 4x2-cell atlas, so picking u in [0.5, 1.0] and v in [0, 0.5]
+                // selects the central solid grass cell without seams.
+                let u0 = 0.55;
+                let u1 = 0.70;
+                let v0 = 0.05;
+                let v1 = 0.45;
 
-                // Two CCW triangles (Godot front-face winding for Y-up looking down)
-                // Triangle 1
                 let verts = [
-                    Vector3::new(x0, 0.0, z0),
-                    Vector3::new(x1, 0.0, z0),
-                    Vector3::new(x0, 0.0, z1),
-                    // Triangle 2
-                    Vector3::new(x1, 0.0, z0),
-                    Vector3::new(x1, 0.0, z1),
-                    Vector3::new(x0, 0.0, z1),
+                    (Vector3::new(x0, 0.0, z0), Vector2::new(u0, v0)),
+                    (Vector3::new(x1, 0.0, z0), Vector2::new(u1, v0)),
+                    (Vector3::new(x0, 0.0, z1), Vector2::new(u0, v1)),
+                    (Vector3::new(x1, 0.0, z0), Vector2::new(u1, v0)),
+                    (Vector3::new(x1, 0.0, z1), Vector2::new(u1, v1)),
+                    (Vector3::new(x0, 0.0, z1), Vector2::new(u0, v1)),
                 ];
 
-                for v in &verts {
-                    positions.push(*v);
-                    colors.push(color);
+                for (p, uv) in &verts {
+                    positions.push(*p);
                     normals.push(up);
+                    uvs.push(*uv);
                 }
             }
         }
 
-        // Build the surface array. Godot expects exactly Mesh::ARRAY_MAX (13) slots.
-        // Unfilled slots must be Nil variants (VariantArray default).
-        // gdext 0.5.2: resize requires a fill value; set requires &Variant.
         let mut arrays = VarArray::new();
         arrays.resize(13, &Variant::nil());
-        // Slot 0 = ARRAY_VERTEX
-        arrays.set(0, &positions.to_variant());
-        // Slot 1 = ARRAY_NORMAL
-        arrays.set(1, &normals.to_variant());
-        // Slot 3 = ARRAY_COLOR
-        arrays.set(3, &colors.to_variant());
+        arrays.set(0, &positions.to_variant()); // ARRAY_VERTEX
+        arrays.set(1, &normals.to_variant());   // ARRAY_NORMAL
+        arrays.set(4, &uvs.to_variant());       // ARRAY_TEX_UV
 
         let mut mesh = ArrayMesh::new_gd();
         mesh.add_surface_from_arrays(PrimitiveType::TRIANGLES, &arrays);
