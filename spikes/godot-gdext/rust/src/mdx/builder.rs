@@ -128,11 +128,15 @@ fn wc3_to_godot_normal(nrm: [f32; 3]) -> [f32; 3] {
 
 fn resolve_texture_name(model: &MdxModel, material_id: u32) -> Option<String> {
     let mat = model.materials.get(material_id as usize)?;
-    let layer = mat.layers.first()?;
-    let tex = model.textures.get(layer.texture_id as usize)?;
-    if tex.replaceable_id == 0 && !tex.file_name.is_empty() {
-        Some(tex.file_name.clone())
-    } else {
-        None
+    // WC3 materials can have multiple layers — first is often team-color
+    // (replaceable_id=1, empty path). Walk every layer and pick the first
+    // one that points at a real file.
+    for layer in &mat.layers {
+        if let Some(tex) = model.textures.get(layer.texture_id as usize) {
+            if tex.replaceable_id == 0 && !tex.file_name.is_empty() {
+                return Some(tex.file_name.clone());
+            }
+        }
     }
+    None
 }
