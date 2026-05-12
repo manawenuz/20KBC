@@ -73,7 +73,7 @@ impl INode3D for ResourceNode {
     fn ready(&mut self) {
         // Try to load a GLB model based on kind.
         let model_path = match self.kind {
-            1 => "res://assets/models/tree.glb",
+            1 => "res://assets/models/lordaerontree.glb",
             2 => "res://assets/models/stone.glb",
             _ => {
                 self.build_fallback_mesh();
@@ -93,7 +93,7 @@ impl INode3D for ResourceNode {
                     // PRD-10 procedural tree/stone glbs are ~1m authored size,
                     // hard to see from the RTS camera distance. Scale up so
                     // they read clearly on the map.
-                    let s = if self.kind == 1 { 2.5 } else { 1.8 };
+                    let s = if self.kind == 1 { 0.05 } else { 1.8 };
                     node3d.set_scale(Vector3::new(s, s, s));
                     self.base_mut().add_child(&node3d);
                     self.mesh = Some(node3d);

@@ -248,6 +248,7 @@ def main() -> int:
                 "units/creeps/timberwolf/timberwolf.mdx:wolf.glb",
                 "doodads/terrain/ashentree/ashentree0.mdx:ashentree.glb",
                 "doodads/terrain/rockchunks/rockchunks0.mdx:rockchunks.glb",
+                "doodads/terrain/lordaerontree/lordaerontree0.mdx:lordaerontree.glb",
             ]
 
             for mapping in mappings:
