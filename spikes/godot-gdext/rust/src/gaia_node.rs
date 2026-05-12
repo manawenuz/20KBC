@@ -1,6 +1,6 @@
 use godot::prelude::*;
 use godot::classes::{
-    AnimationPlayer, CapsuleMesh, MeshInstance3D, INode3D, Node3D, PackedScene,
+    AnimationPlayer, CapsuleMesh, MeshInstance3D, INode3D, Node, Node3D, PackedScene,
     ResourceLoader, StandardMaterial3D,
 };
 use godot::classes::base_material_3d::ShadingMode;
@@ -29,6 +29,7 @@ pub struct GaiaNode {
     anim_player: Option<Gd<AnimationPlayer>>,
     prev_behavior: i64,
     frame_counter: u32,
+    anim_map: [Option<String>; 4],
 }
 
 #[godot_api]
@@ -40,6 +41,7 @@ impl INode3D for GaiaNode {
             anim_player: None,
             prev_behavior: -1,
             frame_counter: 0,
+            anim_map: [None, None, None, None],
         }
     }
 
@@ -57,11 +59,11 @@ impl INode3D for GaiaNode {
                     node3d.set_scale(Vector3::new(0.02, 0.02, 0.02));
                 }
                 self.base_mut().add_child(&instance);
-                // Cache AnimationPlayer if present.
-                if let Some(anim) = instance
-                    .get_node_or_null("AnimationPlayer")
-                    .and_then(|n| n.try_cast::<AnimationPlayer>().ok())
-                {
+                if let Some(mut anim) = Self::find_anim_player(&instance) {
+                    self.anim_map = Self::build_anim_map(&anim);
+                    if let Some(ref idle) = self.anim_map[0] {
+                        anim.play_ex().name(idle.as_str()).done();
+                    }
                     self.anim_player = Some(anim);
                 }
                 return;
@@ -105,18 +107,47 @@ impl INode3D for GaiaNode {
         }
         self.prev_behavior = behavior;
 
-        let anim_name = match behavior {
-            0 => "idle",
-            1 => "walk",
-            2 => "attack",
-            3 => "walk", // Returning — use walk animation
-            _ => "idle",
-        };
-
         if let Some(ref mut anim) = self.anim_player {
-            if anim.has_animation(anim_name) {
-                anim.play_ex().name(anim_name).done();
+            let idx = behavior as usize;
+            if idx < self.anim_map.len() {
+                if let Some(ref name) = self.anim_map[idx] {
+                    anim.play_ex().name(name.as_str()).done();
+                }
             }
         }
+    }
+}
+
+#[godot_api]
+impl GaiaNode {
+    fn find_anim_player(node: &Gd<Node>) -> Option<Gd<AnimationPlayer>> {
+        for i in 0..node.get_child_count() {
+            let child = node.get_child(i)?;
+            if let Ok(anim) = child.clone().try_cast::<AnimationPlayer>() {
+                return Some(anim);
+            }
+            if let Some(found) = Self::find_anim_player(&child) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn resolve_anim(anim: &AnimationPlayer, candidates: &[&str]) -> Option<String> {
+        for candidate in candidates {
+            if anim.has_animation(*candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+        None
+    }
+
+    fn build_anim_map(anim: &AnimationPlayer) -> [Option<String>; 4] {
+        [
+            Self::resolve_anim(anim, &["Stand", "stand", "idle", "Idle"]),
+            Self::resolve_anim(anim, &["Walk", "walk", "Run"]),
+            Self::resolve_anim(anim, &["Attack - 1", "Attack", "attack"]),
+            Self::resolve_anim(anim, &["Walk", "walk", "Run"]),
+        ]
     }
 }
