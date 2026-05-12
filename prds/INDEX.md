@@ -43,6 +43,15 @@ All 4 landed: 10 workers, day/night, replay-on-quit, stress + frame-time HUD.
 | 15 | Combat feedback FX | `.worktrees/prd-15-combat-fx` | pending |
 | 16 | Selected-unit portrait HUD | `.worktrees/prd-16-portrait` | pending |
 
+## Batch 5 (path A: full MDX extraction — serial waves)
+
+| ID | Title | Wave | Status |
+|----|-------|------|--------|
+| 21 | MDX BLP textures + glTF materials | 1 | pending |
+| 22 | MDX bones + skinning → glTF skin | 2 (after 21) | pending |
+| 23 | MDX animations → glTF anim tracks | 3 (after 22) | pending |
+| 24 | Godot animation hookup (behavior → WC3 anim) | 3 (parallel with 23) | pending |
+
 ## Batch 4 (after batch 3 — animated models + audio)
 
 | ID | Title | Worktree | Status |
