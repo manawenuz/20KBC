@@ -51,6 +51,11 @@ impl INode3D for GaiaNode {
 
         if let Some(scene) = model {
             if let Some(instance) = scene.instantiate() {
+                // WC3 wolf.glb is in native WC3 units (~80 tall).
+                // Normalize to ~1.2 m.
+                if let Ok(mut node3d) = instance.clone().try_cast::<Node3D>() {
+                    node3d.set_scale(Vector3::new(0.02, 0.02, 0.02));
+                }
                 self.base_mut().add_child(&instance);
                 // Cache AnimationPlayer if present.
                 if let Some(anim) = instance

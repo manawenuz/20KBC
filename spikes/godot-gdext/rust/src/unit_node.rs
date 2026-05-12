@@ -84,6 +84,13 @@ impl INode3D for UnitNode {
 
         if let Some(scene) = model {
             if let Some(instance) = scene.instantiate() {
+                // WC3 peasant.glb is in native WC3 units (~80–100 tall).
+                // Normalize to roughly 1.8 m by scaling 0.02 and offset Y so
+                // feet sit on ground plane.
+                if let Ok(mut node3d) = instance.clone().try_cast::<Node3D>() {
+                    node3d.set_scale(Vector3::new(0.02, 0.02, 0.02));
+                    node3d.set_position(Vector3::new(0.0, 0.0, 0.0));
+                }
                 self.base_mut().add_child(&instance);
                 if let Some(anim) = Self::find_anim_player(&instance) {
                     self.anim_player = Some(anim);
