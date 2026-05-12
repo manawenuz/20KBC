@@ -107,4 +107,46 @@ impl SimBridge {
             .map(|s| s.iter_units().filter(|u| !u.is_dead).count() as i64)
             .unwrap_or(0)
     }
+
+    /// Returns a flat Array<Vector3> where each element packs (id as f32, x, z).
+    /// GDScript decodes: id = int(v.x), pos = Vector3(v.y, 0, v.z).
+    /// Only non-depleted nodes are returned (amount > 0).
+    #[func]
+    pub fn get_resource_nodes(&self) -> Array<Vector3> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for n in sim.iter_resources() {
+                if !n.is_depleted() {
+                    arr.push(Vector3::new(n.id as f32, n.pos.x, n.pos.y));
+                }
+            }
+        }
+        arr
+    }
+
+    /// Returns kinds aligned with get_resource_nodes order: 1=Wood, 2=Stone.
+    #[func]
+    pub fn get_resource_kinds(&self) -> Array<i64> {
+        let mut arr = Array::new();
+        if let Some(sim) = &self.sim {
+            for n in sim.iter_resources() {
+                if !n.is_depleted() {
+                    let kind_val = match &n.kind {
+                        game_core::ResourceKind::Wood => 1_i64,
+                        game_core::ResourceKind::Stone => 2_i64,
+                    };
+                    arr.push(kind_val);
+                }
+            }
+        }
+        arr
+    }
+
+    /// Order `unit_id` to gather from `node_id`. Forwards to CSimulation::issue_order.
+    #[func]
+    pub fn issue_gather_order(&mut self, unit_id: u32, node_id: u32) {
+        if let Some(sim) = &mut self.sim {
+            sim.issue_order(unit_id, Order::Gather { node: node_id });
+        }
+    }
 }
