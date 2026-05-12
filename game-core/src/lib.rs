@@ -1,4 +1,5 @@
 pub mod config;
+pub mod formation;
 pub mod gaia;
 pub mod orders;
 pub mod pathfinding;
@@ -14,6 +15,7 @@ pub use glam::Vec2;
 
 // Re-export the public surface the spec requires.
 pub use config::SimConfig;
+pub use formation::formation_positions;
 pub use gaia::CGaiaEntity;
 pub use orders::{InputEntry, Order};
 pub use pathfinding::GridPathfinder;
