@@ -330,4 +330,20 @@ impl SimBridge {
             })
             .unwrap_or(0)
     }
+
+    /// Returns the behavior state of the GAIA entity at the given index.
+    /// 0 = Roaming, 1 = Chasing, 2 = Attacking, 3 = Returning.
+    #[func]
+    pub fn get_gaia_behavior(&self, gaia_idx: u32) -> i64 {
+        use game_core::gaia::GaiaBehavior;
+        self.sim.as_ref()
+            .and_then(|s| s.gaia.get(gaia_idx as usize))
+            .map(|g| match &g.behavior {
+                GaiaBehavior::Roaming { .. } => 0,
+                GaiaBehavior::Chasing { .. } => 1,
+                GaiaBehavior::Attacking { .. } => 2,
+                GaiaBehavior::Returning => 3,
+            })
+            .unwrap_or(0)
+    }
 }
