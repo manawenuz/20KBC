@@ -1,6 +1,6 @@
 use godot::prelude::*;
 use godot::classes::{
-    CapsuleMesh, MeshInstance3D, INode3D, Node3D, StandardMaterial3D,
+    CapsuleMesh, MeshInstance3D, INode3D, Node3D, StandardMaterial3D, TorusMesh,
 };
 use godot::classes::base_material_3d::ShadingMode;
 
@@ -20,6 +20,14 @@ const COLOR_UNIT: Color = Color {
 ///
 /// Keeping the visual node thin (no game logic) and driven entirely by
 /// `SimBridge` preserves the clean sim/renderer separation from the spec.
+/// Green selection ring colour.
+const COLOR_RING: Color = Color {
+    r: 0.20,
+    g: 0.85,
+    b: 0.30,
+    a: 1.0,
+};
+
 #[derive(GodotClass)]
 #[class(base = Node3D)]
 pub struct UnitNode {
@@ -27,12 +35,13 @@ pub struct UnitNode {
     #[var]
     pub unit_id: u32,
     base: Base<Node3D>,
+    ring: Option<Gd<MeshInstance3D>>,
 }
 
 #[godot_api]
 impl INode3D for UnitNode {
     fn init(base: Base<Node3D>) -> Self {
-        Self { unit_id: 0, base }
+        Self { unit_id: 0, base, ring: None }
     }
 
     fn ready(&mut self) {
@@ -55,5 +64,33 @@ impl INode3D for UnitNode {
         mesh_inst.set_position(Vector3::new(0.0, 0.9, 0.0));
 
         self.base_mut().add_child(&mesh_inst);
+
+        // Build green selection ring (torus) at feet.
+        let mut torus = TorusMesh::new_gd();
+        torus.set_inner_radius(0.6);
+        torus.set_outer_radius(0.75);
+
+        let mut ring_mat = StandardMaterial3D::new_gd();
+        ring_mat.set_albedo(COLOR_RING);
+        ring_mat.set_shading_mode(ShadingMode::PER_PIXEL);
+        torus.surface_set_material(0, &ring_mat);
+
+        let mut ring_inst = MeshInstance3D::new_alloc();
+        ring_inst.set_mesh(&torus);
+        ring_inst.set_position(Vector3::new(0.0, 0.05, 0.0));
+        ring_inst.set_visible(false);
+
+        self.base_mut().add_child(&ring_inst);
+        self.ring = Some(ring_inst);
+    }
+}
+
+#[godot_api]
+impl UnitNode {
+    #[func]
+    pub fn set_selected(&mut self, selected: bool) {
+        if let Some(ring) = &mut self.ring {
+            ring.set_visible(selected);
+        }
     }
 }

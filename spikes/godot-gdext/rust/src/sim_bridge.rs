@@ -107,4 +107,27 @@ impl SimBridge {
             .map(|s| s.iter_units().filter(|u| !u.is_dead).count() as i64)
             .unwrap_or(0)
     }
+
+    /// Returns the UnitId of the closest living unit within `radius` of (world_x, world_z).
+    /// Returns -1 if no unit is within range.
+    #[func]
+    pub fn get_unit_at(&self, world_x: f32, world_z: f32, radius: f32) -> i64 {
+        let target = game_core::Vec2::new(world_x, world_z);
+        let radius_sq = radius * radius;
+        self.sim
+            .as_ref()
+            .and_then(|s| {
+                s.iter_units()
+                    .filter(|u| !u.is_dead)
+                    .filter(|u| u.pos.distance_squared(target) <= radius_sq)
+                    .min_by(|a, b| {
+                        a.pos
+                            .distance_squared(target)
+                            .partial_cmp(&b.pos.distance_squared(target))
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|u| u.id as i64)
+            })
+            .unwrap_or(-1)
+    }
 }
