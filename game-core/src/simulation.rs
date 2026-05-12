@@ -67,16 +67,33 @@ impl CSimulation {
             sim.spawn_unit(0, depot + offset);
         }
 
-        // Resource nodes.
-        let nodes = [
-            (Vec2::new(depot.x + 15.0, depot.y + 5.0), 500u32),
-            (Vec2::new(depot.x - 15.0, depot.y - 5.0), 500u32),
-            (Vec2::new(depot.x + 5.0, depot.y + 20.0), 300u32),
+        // Trees: a small forest scattered around the depot — close enough to
+        // see, far enough to walk to. Mix of clusters and lone trees.
+        let wood_positions: [Vec2; 12] = [
+            Vec2::new(depot.x + 12.0, depot.y + 4.0),
+            Vec2::new(depot.x + 14.0, depot.y + 7.0),
+            Vec2::new(depot.x + 16.0, depot.y + 3.0),
+            Vec2::new(depot.x + 18.0, depot.y + 6.0),
+
+            Vec2::new(depot.x - 14.0, depot.y - 5.0),
+            Vec2::new(depot.x - 16.0, depot.y - 8.0),
+            Vec2::new(depot.x - 18.0, depot.y - 4.0),
+
+            Vec2::new(depot.x + 4.0, depot.y + 18.0),
+            Vec2::new(depot.x + 7.0, depot.y + 20.0),
+            Vec2::new(depot.x - 3.0, depot.y + 22.0),
+
+            Vec2::new(depot.x - 22.0, depot.y + 6.0),
+            Vec2::new(depot.x + 22.0, depot.y - 10.0),
         ];
-        for (pos, amt) in nodes {
-            sim.spawn_resource_node(ResourceKind::Wood, pos, amt);
+        for pos in wood_positions {
+            sim.spawn_resource_node(ResourceKind::Wood, pos, 250);
         }
+
+        // Stone outcrops — fewer, further out.
         sim.spawn_resource_node(ResourceKind::Stone, Vec2::new(depot.x - 5.0, depot.y + 15.0), 400);
+        sim.spawn_resource_node(ResourceKind::Stone, Vec2::new(depot.x + 8.0, depot.y - 18.0), 400);
+        sim.spawn_resource_node(ResourceKind::Stone, Vec2::new(depot.x - 20.0, depot.y - 12.0), 400);
 
         // One GAIA wolf near the map corner.
         let wolf_center = Vec2::new(20.0, 20.0);

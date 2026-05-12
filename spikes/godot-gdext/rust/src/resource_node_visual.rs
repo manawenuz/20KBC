@@ -89,7 +89,12 @@ impl INode3D for ResourceNode {
         if let Some(ps) = packed {
             let instance = ps.instantiate();
             if let Some(node) = instance {
-                if let Ok(node3d) = node.try_cast::<Node3D>() {
+                if let Ok(mut node3d) = node.try_cast::<Node3D>() {
+                    // PRD-10 procedural tree/stone glbs are ~1m authored size,
+                    // hard to see from the RTS camera distance. Scale up so
+                    // they read clearly on the map.
+                    let s = if self.kind == 1 { 2.5 } else { 1.8 };
+                    node3d.set_scale(Vector3::new(s, s, s));
                     self.base_mut().add_child(&node3d);
                     self.mesh = Some(node3d);
                     self.sim_bridge = self.find_sim_bridge();
