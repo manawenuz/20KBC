@@ -1,153 +1,165 @@
 # Handover — Godot 4 + gdext Spike
 
-## Status: Running ✅
+## Status: Running with runtime WC3 assets ✅
 
-The spike launched successfully. Godot 4.6.2 renders the terrain and 3 worker
-units driven by the live `game-core` simulation at 20 Hz.
+The spike loads MDX models, BLP textures, and MPQ archives **at runtime**
+(no offline glTF conversion), renders peasants with skinned animation,
+and drives geoset visibility per-frame from GEOA curves the same way
+WC3 / WarsmashModEngine does.
 
 ### What works
-- GDExtension loads (`Initialize godot-rust` + `SimBridge: simulation initialized` in log)
-- Flat terrain quad renders (grey — vertex colors need a shader, see below)
-- 3 worker units appear as brown capsules in the scene center
-- `SimBridge._physics_process` ticks `CSimulation` at 20 Hz (Godot physics = 20 tps)
-- HUD labels `Wood: 0 / Stone: 0` visible top-left
-- Right-click on terrain issues a Move order to unit 0 via `sim.issue_move_order`
 
-### What doesn't work yet
-- **Terrain vertex colors**: The `ArrayMesh` carries color data in `ARRAY_COLOR`
-  but the default `StandardMaterial3D` ignores vertex colors in Forward+.
-  Fix: add a minimal shader or switch to `BaseMaterial3D` with
-  `vertex_color_use_as_albedo = true`.
-- **Unit position sync**: `main.gd` calls `sim.get_unit_positions()` and updates
-  `Node3D.position` every physics tick. Units are not moving yet because the
-  GDScript loop uses index `i` as the key, not `UnitId`. Wire up unit IDs properly.
-- **Camera pan**: `RtsCameraController` reads `Input.is_action_pressed("move_*")`
-  — the input actions need to be defined in Godot's Input Map (Project Settings →
-  Input Map → add `move_forward`, `move_back`, `move_left`, `move_right`).
-  Alternatively, switch to polling `Input.is_key_pressed(KEY_W)` etc. directly.
-- **Wolf / GAIA**: No `GaiaNode` type exists yet — the wolf is in the simulation
-  but has no visual representation.
-- **Resource nodes**: Not yet rendered.
-- **HUD live update**: `GameHud` Rust type is registered but `main.gd` doesn't
-  call into it — update the Labels from GDScript using `sim.get_wood()` /
-  `sim.get_stone()`.
+- Terrain mesh + day/night + camera + selection ring + HUD (early-spike work).
+- `SimBridge` ticks `game-core` at 20 Hz; positions sync to `UnitNode` / `GaiaNode` / `BuildingNode` / `ResourceNode` each tick.
+- **Runtime asset pipeline** (PRDs 30–36):
+  - `datasource/mpq.rs` opens `/Volumes/samGames/WC3/War3.mpq` and reads files by virtual path.
+  - `blp/mod.rs` decodes BLP1 textures to RGBA8.
+  - `mdx/parser.rs` parses MDX800 binary (VERS, MODL, SEQS, MTLS, TEXS, GEOS, GEOA, BONE, HELP, PIVT).
+  - `mdx/builder.rs` builds `ArrayMesh` with positions / normals / UVs / `ARRAY_BONES` / `ARRAY_WEIGHTS` and emits one surface per geoset.
+  - `mdx/skin.rs` builds `Skeleton3D` + `Skin` (parent-relative rest, absolute-pivot inverse-bind, self-cycle guard).
+  - `mdx/animation.rs` emits an `AnimationLibrary` with one `Animation` per sequence; position keys are `rest + delta`.
+  - `asset_registry.rs` is a thread-local cache from `mdx_path → ResolvedModel` (mesh, textures, skeleton, skin, anims, parsed model).
+- **Per-frame geoset alpha** (PRD-37, Warsmash-style):
+  - `mdx_instance.rs` is a `Node` child of each visual; every frame it samples each geoset's GEOA curve at the active sequence's elapsed time and writes the result into the corresponding surface material's `albedo.a`.
+  - GEOA sampling is sequence-scoped: only keys within `[seq_start, seq_end]` are interpolated; no in-window keys → `static_alpha`. Matches WC3's runtime semantics so out-of-window keys (e.g. Stand Work) don't bleed into Stand.
+  - Materials use `Transparency::ALPHA` so fades are smooth, no halos.
+  - Behavior-driven animation switch in `UnitNode::process` calls `mdx_instance.set_sequence(name)` so the alpha sampler tracks the same window the `AnimationPlayer` is in.
+
+### What's rough or unfinished
+
+- **Posture issues remain on some peasants** — the top-left peasant in screenshot #31 is hunched. Most likely cause: MDX scale tracks (`KGSC`) emitted into Godot `SCALE_3D` tracks have keyframes that drive bones to near-zero scale. Suspect fix mirrors what we did for GEOA: scope scale-track samples to the active sequence window (or clamp away anything below ~0.01).
+- **Arms** — fixed in principle by the sequence-windowed sampler in commit `e3e106f`, but not yet visually re-verified.
+- **Only `UnitNode` is wired to `MdxInstance`.** `GaiaNode` (wolf), `BuildingNode`, and `ResourceNode` still go through the older "build materials inline" path. Same wiring needs to be applied to all four for consistent behavior (death-fade alpha on units, fall-down trees, etc.).
+- **Team color**: `team_color.rs` and the replaceable-texture path exist (PRD-35) but are inactive — peasants are not painted per-player.
+- **WC3 multi-layer shader**: `wc3_material/mod.rs` exists (PRD-33) but isn't used; everything renders with `StandardMaterial3D`.
+- **Lumber-on-shoulder when carrying wood**: deferred. With per-frame GEOA alpha working, this becomes free once the sim emits a "carrying lumber" behavior that selects the right sequence (Stand Work / Stand Lumber).
+- **Keep producing peasants** is a gameplay feature, never started.
 
 ---
 
-## Project layout
+## Project layout (current)
 
 ```
 spikes/godot-gdext/
-├── project.godot                   Godot 4 project (config_version=5, physics=20Hz)
-├── spike-godot-gdext.gdextension   Extension manifest — points to the compiled dylib
-├── .godot/
-│   └── extension_list.cfg          Tells Godot to load spike-godot-gdext.gdextension
-├── scenes/
-│   └── Main.tscn                   Root scene — uses GDExtension node types directly
-├── scripts/
-│   └── main.gd                     GDScript bootstrap: unit sync + right-click orders
+├── project.godot                   Godot 4 project (physics=20Hz)
+├── spike-godot-gdext.gdextension   Extension manifest
+├── scenes/Main.tscn                Root scene
+├── scripts/main.gd                 Bootstrap + per-tick position sync
 ├── rust/
-│   ├── Cargo.toml                  cdylib crate; game-core path = ../../../game-core
+│   ├── Cargo.toml                  cdylib; game-core = ../../../game-core
 │   └── src/
-│       ├── lib.rs                  ExtensionLibrary entry point
-│       ├── sim_bridge.rs           SimBridge: wraps CSimulation, exposes to GDScript
-│       ├── terrain_node.rs         TerrainNode: builds ArrayMesh terrain in ready()
-│       ├── unit_node.rs            UnitNode: capsule mesh, #[var] unit_id
-│       ├── camera_controller.rs    RtsCameraController: WASD pan + scroll zoom
-│       └── hud.rs                  GameHud: Control node with resource labels
-└── target/                         (gitignored) compiled artifacts
+│       ├── lib.rs                  GDExtension entry point + module list
+│       ├── sim_bridge.rs           Wraps CSimulation, initializes AssetRegistry
+│       ├── asset_registry.rs      Thread-local MDX/BLP cache → ResolvedModel
+│       ├── mdx/                    parser, builder, skin, animation, types
+│       │   └── mod.rs              sample_alpha_at (sequence-scoped GEOA sampler)
+│       ├── mdx_instance.rs         Per-spawn per-frame alpha driver (PRD-37)
+│       ├── blp/mod.rs              BLP1 decoder → RGBA8
+│       ├── datasource/             mpq, compound (compound unused so far)
+│       ├── terrain_node.rs / day_night.rs / camera_controller.rs / hud.rs / ...
+│       ├── unit_node.rs            Peasant visual; wired to MdxInstance
+│       ├── gaia_node.rs            Wolf visual; not yet on MdxInstance
+│       ├── building_node.rs        Keep/Castle/Townhall; not yet on MdxInstance
+│       ├── resource_node_visual.rs Tree/stone; not yet on MdxInstance
+│       ├── team_color.rs           Built (PRD-35), inactive
+│       └── wc3_material/mod.rs     Built (PRD-33), inactive
+└── target/                         (gitignored)
 ```
 
 ---
 
-## How to build and run
+## Build / run
 
 ```bash
-# 1. Build the Rust extension (from project root)
 cd spikes/godot-gdext/rust && cargo build
-
-# 2. Launch the game
 godot --path /Users/manwe/CascadeProjects/20KBC/spikes/godot-gdext/
 ```
 
-Godot 4.6+ is required (`brew install --cask godot`).
-Rust ≥ 1.94 is required (gdext 0.5.2 master). Run `rustup update stable`.
-
-The compiled dylib lives at:
-`spikes/godot-gdext/target/debug/libspike_godot_gdext.dylib`
-(workspace root = `spikes/godot-gdext/`, not `rust/` — that's why the path is `target/`
-not `rust/target/`).
+Requires Godot 4.6+ and a War3.mpq at `/Volumes/samGames/WC3/War3.mpq`.
+If the MPQ is unreachable, the visual nodes fall back to the legacy
+`res://assets/models/*.glb` path (or capsule for `UnitNode`), so the
+game still runs without textures/animation.
 
 ---
 
 ## Key design decisions
 
-**SimBridge as a Node, not a singleton.**
-`SimBridge` is placed in the scene tree and found via `$SimBridge` in GDScript.
-If you want it as a true Godot autoload singleton, register it in `project.godot`
-under `[autoload]` and expose a `get_singleton()` Rust function.
+**Thread-local AssetRegistry.** `Gd<T>` is `!Send`, so the registry is
+`thread_local!<RefCell<Option<AssetRegistry>>>`. All Godot callbacks
+run on the main thread anyway.
 
-**Physics process at 20 Hz.**
-`project.godot` sets `physics/common/physics_ticks_per_second = 20`.
-`SimBridge._physics_process()` calls `sim.tick()` exactly once per call, so the
-simulation and render are in sync at 20 Hz. If you want render at 60 Hz + sim at
-20 Hz, switch to `_process` + a float accumulator (see how spike-bevy does it).
+**Per-instance materials, shared mesh.** `ResolvedModel.mesh` is shared
+across all spawns of the same MDX (cached). Materials are recreated per
+spawn so `MdxInstance` can mutate `albedo.a` without bleeding alpha
+across peasants. `Skeleton3D` is also recreated (via `.duplicate()`)
+per spawn because nodes can have only one parent.
 
-**`gdext_rust_init` entry point.**
-The `#[gdextension]` macro on `SpikGodotGdext` generates this symbol.
-It matches `entry_symbol = "gdext_rust_init"` in the `.gdextension` file.
+**Sequence-scoped GEOA sampling.** Critical for correctness: each WC3
+sequence is independent. Sampling keys globally would let a Stand Work
+key with alpha=0 fade out the arm geoset during Stand. The fix is in
+`mdx/mod.rs::sample_alpha_at(entry, t, seq_start, seq_end)`.
 
----
+**WC3 → Godot coord transform.** `(x, y, z) → (x, z, -y)`. This flips
+handedness, so triangle winding is reversed (`i0, i2, i1`) in
+`builder.rs`. Normals get the same swizzle. Pivots, bind matrices, and
+animation translation keys all live in Godot space after conversion.
 
-## Immediate next tasks
-
-1. **Terrain vertex colors** — in `terrain_node.rs` `build_terrain_mesh()`,
-   add a material with vertex color support:
-   ```rust
-   // After building the ArrayMesh:
-   let mut mat = StandardMaterial3D::new_gd();
-   mat.set_flag(BaseMaterial3DFlags::USE_POINT_SIZE, false);
-   // Godot 4: vertex_color_use_as_albedo
-   mat.set_flag(BaseMaterial3DFlags::ALBEDO_FROM_VERTEX_COLOR, true);
-   self.base_mut().set_surface_override_material(0, &mat);
-   ```
-   Or use a ShaderMaterial with a trivial vertex-color shader.
-
-2. **Unit movement** — units are in the sim but positions don't update in the
-   GDScript loop because unit IDs aren't tracked. Fix `main.gd` `_sync_units()`
-   to key by `UnitId` from `sim.get_unit_ids()` (add that method to `SimBridge`).
-
-3. **Input map** — add WASD actions in `project.godot`:
-   ```ini
-   [input]
-   move_forward={ "deadzone": 0.2, "events": [{"type":"key","keycode":87}] }
-   move_back={    "deadzone": 0.2, "events": [{"type":"key","keycode":83}] }
-   move_left={    "deadzone": 0.2, "events": [{"type":"key","keycode":65}] }
-   move_right={   "deadzone": 0.2, "events": [{"type":"key","keycode":68}] }
-   ```
-   Key codes: W=87, A=65, S=83, D=68.
-
-4. **Wolf / GAIA rendering** — add `get_gaia_positions()` to `SimBridge`,
-   spawn `GaiaNode` (red capsule) in GDScript the same way as `UnitNode`.
-
-5. **Resource node rendering** — add `get_resource_positions()` to `SimBridge`,
-   spawn box meshes from GDScript.
+**Animation position tracks add rest.** WC3 `KGTR` keys are deltas from
+the bone's bind pose in parent space, but Godot `POSITION_3D` tracks
+replace the pose position. `animation.rs` therefore inserts
+`rest + delta` for each keyframe. Rotations use identity rest so they
+go in unchanged.
 
 ---
 
-## game-core interface (what SimBridge exposes)
+## Known gotchas
+
+- **Skeleton self-cycles**: some MDX nodes have `parent_id == object_id`. `skin.rs` filters these defensively (`if parent_id == 0xFFFFFFFF || parent_id == object_id`). Same filter applied in the offline glTF writer historically.
+- **HELP chunk required**: peasant uses a HELP node (Bone_Root) to connect Pelvis to Chest. Parser reads HELP with the same node-header reader as BONE.
+- **Material layer 0 is often team color**: `builder.rs::resolve_texture_name` walks **all** layers and picks the first one with `replaceable_id == 0` and a non-empty file_name. Picking layer 0 misses the actual body texture on units like peasants.
+- **Disk space**: `cargo build` outputs to `spikes/godot-gdext/target/`. The repo root and any worktrees can accumulate multi-GB `target/` directories. `rm -rf` is safe.
+- **Kimi dispatch is fragile**: `scripts/dispatch-kimi-plain.sh` works but Kimi processes may exit silently. Cap concurrent Kimi runs at ≤4. If a worker stalls, kill it and integrate manually from the worktree.
+
+---
+
+## Next tasks (priority order)
+
+1. **Visually verify arms appear** after `e3e106f` (sequence-scoped GEOA). Screenshot a fresh launch.
+2. **Fix hunched-posture peasant** (scale tracks). Scope scale-track keyframes to the active sequence window in `animation.rs`, mirroring the GEOA fix.
+3. **Apply `MdxInstance` to `GaiaNode`, `BuildingNode`, `ResourceNode`**. Same wiring as `UnitNode::try_spawn_from_registry`:
+   - Build materials per-instance.
+   - Add `MdxInstance` child, configure with `(model, geoset_indices, materials)`.
+   - Call `set_sequence` on behavior transitions.
+4. **Activate team color** (PRD-35). The cache + replaceable-id logic is built; UnitNode needs to look up the unit's player owner via `SimBridge` and request the matching team-color texture for surfaces whose original `TextureRef.replaceable_id == 1`.
+5. **Activate WC3 multi-layer shader** (PRD-33). Replace `StandardMaterial3D` with the `ShaderMaterial` that handles MDX filter modes (None / Transparent / Blend / Additive / AddAlpha / Modulate / Modulate2x). Needed for the team-color glow, fire, water, etc.
+6. **Keep produces peasants**: gameplay feature, needs game-core support (production queue per building) + GDScript UI.
+7. **Lumber on shoulder**: requires sim-side "carrying lumber" behavior bit + `UnitNode` mapping it to "Stand Work" / "Stand Lumber". With per-frame GEOA alpha working, the bundle geoset will appear automatically when the right sequence is active.
+
+---
+
+## game-core interface (current)
 
 ```rust
-// Current SimBridge @func methods callable from GDScript:
 fn issue_move_order(&mut self, unit_id: u32, x: f32, z: f32)
-fn get_unit_positions(&self) -> Array<Vector2>   // [(x,z) per living unit]
+fn get_unit_positions(&self) -> Array<Vector2>
+fn get_unit_facing(&self, unit_id: u32) -> f32
+fn get_unit_behavior(&self, unit_id: u32) -> i64
 fn get_wood(&self) -> u32
 fn get_stone(&self) -> u32
+fn get_resource_amount(&self, node_id: u32) -> i64
+// plus gaia / resource / building accessors used by main.gd
 ```
 
-`CSimulation` on the Rust side also has:
-- `iter_units()` → iterator over `CUnit` (pos, hp, behavior, owner, is_dead)
-- `iter_resources()` → iterator over `CResourceNode` (pos, kind, amount)
-- `gaia` field → `Vec<CGaiaEntity>` (pos, territory, behavior)
-- `tick` field → `u64` (current game tick)
-- `player_resources(id)` → `(wood, stone)`
+---
+
+## PRDs
+
+Located in `prds/`:
+- 30 — Runtime MPQ data source
+- 31 — Runtime BLP decoder
+- 32 — Runtime MDX parser + mesh builder
+- 33 — WC3 multi-layer material shader (built, inactive)
+- 34 — Runtime skinning + animation library
+- 35 — Team color (built, inactive)
+- 36 — UnitNode / BuildingNode runtime integration
+- 37 — Warsmash-style per-frame geoset alpha (landed in commit 497d7b3 + e3e106f)
