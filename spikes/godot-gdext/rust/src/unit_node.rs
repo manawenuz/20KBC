@@ -55,6 +55,7 @@ pub struct UnitNode {
     anim_player: Option<Gd<AnimationPlayer>>,
     prev_behavior: i64,
     behavior_poll: u32,
+    anim_map: [Option<String>; 4],
 }
 
 #[godot_api]
@@ -73,6 +74,7 @@ impl INode3D for UnitNode {
             anim_player: None,
             prev_behavior: -1,
             behavior_poll: 0,
+            anim_map: [None, None, None, None],
         }
     }
 
@@ -92,7 +94,11 @@ impl INode3D for UnitNode {
                     node3d.set_position(Vector3::new(0.0, 0.0, 0.0));
                 }
                 self.base_mut().add_child(&instance);
-                if let Some(anim) = Self::find_anim_player(&instance) {
+                if let Some(mut anim) = Self::find_anim_player(&instance) {
+                    self.anim_map = Self::build_anim_map(&anim);
+                    if let Some(ref idle) = self.anim_map[0] {
+                        anim.play_ex().name(idle.as_str()).done();
+                    }
                     self.anim_player = Some(anim);
                 }
             } else {
@@ -156,16 +162,15 @@ impl INode3D for UnitNode {
             let behavior = self
                 .find_sim_bridge()
                 .map(|sim| sim.bind().get_unit_behavior(self.unit_id));
-            if let (Some(behavior), Some(anim)) = (behavior, &mut self.anim_player) {
+            if let (Some(behavior), Some(ref mut anim)) = (behavior, &mut self.anim_player) {
                 if behavior != self.prev_behavior {
                     self.prev_behavior = behavior;
-                    let anim_name = match behavior {
-                        1 => "walk",
-                        2 => "walk",
-                        3 => "attack",
-                        _ => "idle",
-                    };
-                    anim.play_ex().name(anim_name).done();
+                    let idx = behavior as usize;
+                    if idx < self.anim_map.len() {
+                        if let Some(ref name) = self.anim_map[idx] {
+                            anim.play_ex().name(name.as_str()).done();
+                        }
+                    }
                 }
             }
         }
@@ -257,6 +262,24 @@ impl UnitNode {
             }
         }
         None
+    }
+
+    fn resolve_anim(anim: &AnimationPlayer, candidates: &[&str]) -> Option<String> {
+        for candidate in candidates {
+            if anim.has_animation(*candidate) {
+                return Some(candidate.to_string());
+            }
+        }
+        None
+    }
+
+    fn build_anim_map(anim: &AnimationPlayer) -> [Option<String>; 4] {
+        [
+            Self::resolve_anim(anim, &["Stand", "stand", "idle", "Idle"]),
+            Self::resolve_anim(anim, &["Walk", "walk", "Run"]),
+            Self::resolve_anim(anim, &["Attack - 1", "Attack", "attack"]),
+            Self::resolve_anim(anim, &["Stand Work", "Stand", "Walk"]),
+        ]
     }
 
     fn find_sim_bridge(&self) -> Option<Gd<crate::sim_bridge::SimBridge>> {
