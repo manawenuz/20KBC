@@ -1,6 +1,7 @@
 use godot::prelude::*;
 use godot::classes::{
-    CapsuleMesh, MeshInstance3D, INode3D, Node3D, StandardMaterial3D, TorusMesh,
+    AnimationPlayer, CapsuleMesh, MeshInstance3D, INode3D, Node, Node3D, PackedScene,
+    ResourceLoader, StandardMaterial3D, TorusMesh,
 };
 use godot::classes::base_material_3d::ShadingMode;
 use crate::damage_number::DamageNumber;
@@ -51,6 +52,9 @@ pub struct UnitNode {
     flash_timer: f32,
     dying: bool,
     death_elapsed: f32,
+    anim_player: Option<Gd<AnimationPlayer>>,
+    prev_behavior: i64,
+    behavior_poll: u32,
 }
 
 #[godot_api]
@@ -66,29 +70,31 @@ impl INode3D for UnitNode {
             flash_timer: 0.0,
             dying: false,
             death_elapsed: 0.0,
+            anim_player: None,
+            prev_behavior: -1,
+            behavior_poll: 0,
         }
     }
 
     fn ready(&mut self) {
-        // Build capsule mesh (radius 0.4, height 1.8 — matches spec).
-        let mut capsule = CapsuleMesh::new_gd();
-        capsule.set_radius(0.4);
-        capsule.set_height(1.8);
+        let mut loader = ResourceLoader::singleton();
+        let model: Option<Gd<PackedScene>> = loader
+            .load("res://assets/models/peasant.glb")
+            .and_then(|r| r.try_cast::<PackedScene>().ok());
 
-        // Sandy-brown material — no textures needed for this spike.
-        let mut mat = StandardMaterial3D::new_gd();
-        mat.set_albedo(COLOR_UNIT);
-        mat.set_shading_mode(ShadingMode::PER_PIXEL);
-        capsule.surface_set_material(0, &mat);
-
-        // Attach as a child MeshInstance3D so the unit node's transform
-        // controls world position while the mesh stays at local origin.
-        let mut mesh_inst = MeshInstance3D::new_alloc();
-        mesh_inst.set_mesh(&capsule);
-        // Offset upward by half height so the capsule sits on y=0.
-        mesh_inst.set_position(Vector3::new(0.0, 0.9, 0.0));
-
-        self.base_mut().add_child(&mesh_inst);
+        if let Some(scene) = model {
+            if let Some(instance) = scene.instantiate() {
+                self.base_mut().add_child(&instance);
+                if let Some(anim) = Self::find_anim_player(&instance) {
+                    self.anim_player = Some(anim);
+                }
+            } else {
+                self.spawn_capsule();
+            }
+        } else {
+            godot_warn!("peasant.glb missing — falling back to capsule");
+            self.spawn_capsule();
+        }
 
         // Build green selection ring (torus) at feet.
         let mut torus = TorusMesh::new_gd();
@@ -107,8 +113,6 @@ impl INode3D for UnitNode {
 
         self.base_mut().add_child(&ring_inst);
         self.ring = Some(ring_inst);
-        self.mesh = Some(mesh_inst);
-        self.material = Some(mat);
     }
 
     fn process(&mut self, delta: f64) {
@@ -135,6 +139,27 @@ impl INode3D for UnitNode {
                 color.a = 1.0 - t;
                 mat.set_albedo(color);
                 mat.set_transparency(godot::classes::base_material_3d::Transparency::ALPHA);
+            }
+        }
+
+        // Poll behavior and switch animation ~ every 5 frames.
+        self.behavior_poll += 1;
+        if self.behavior_poll >= 5 {
+            self.behavior_poll = 0;
+            let behavior = self
+                .find_sim_bridge()
+                .map(|sim| sim.bind().get_unit_behavior(self.unit_id));
+            if let (Some(behavior), Some(anim)) = (behavior, &mut self.anim_player) {
+                if behavior != self.prev_behavior {
+                    self.prev_behavior = behavior;
+                    let anim_name = match behavior {
+                        1 => "walk",
+                        2 => "walk",
+                        3 => "attack",
+                        _ => "idle",
+                    };
+                    anim.play_ex().name(anim_name).done();
+                }
             }
         }
     }
@@ -188,5 +213,50 @@ impl UnitNode {
         } else {
             self.base_mut().add_child(&damage_number);
         }
+    }
+
+    fn spawn_capsule(&mut self) {
+        // Build capsule mesh (radius 0.4, height 1.8 — matches spec).
+        let mut capsule = CapsuleMesh::new_gd();
+        capsule.set_radius(0.4);
+        capsule.set_height(1.8);
+
+        // Sandy-brown material — no textures needed for this spike.
+        let mut mat = StandardMaterial3D::new_gd();
+        mat.set_albedo(COLOR_UNIT);
+        mat.set_shading_mode(ShadingMode::PER_PIXEL);
+        capsule.surface_set_material(0, &mat);
+
+        // Attach as a child MeshInstance3D so the unit node's transform
+        // controls world position while the mesh stays at local origin.
+        let mut mesh_inst = MeshInstance3D::new_alloc();
+        mesh_inst.set_mesh(&capsule);
+        // Offset upward by half height so the capsule sits on y=0.
+        mesh_inst.set_position(Vector3::new(0.0, 0.9, 0.0));
+
+        self.base_mut().add_child(&mesh_inst);
+        self.mesh = Some(mesh_inst);
+        self.material = Some(mat);
+    }
+
+    fn find_anim_player(node: &Gd<Node>) -> Option<Gd<AnimationPlayer>> {
+        for i in 0..node.get_child_count() {
+            let child = node.get_child(i)?;
+            if let Ok(anim) = child.clone().try_cast::<AnimationPlayer>() {
+                return Some(anim);
+            }
+            if let Some(found) = Self::find_anim_player(&child) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn find_sim_bridge(&self) -> Option<Gd<crate::sim_bridge::SimBridge>> {
+        let parent = self.base().get_parent()?;
+        let grandparent = parent.get_parent()?;
+        grandparent
+            .get_node_or_null("SimBridge")
+            .and_then(|n| n.try_cast::<crate::sim_bridge::SimBridge>().ok())
     }
 }
