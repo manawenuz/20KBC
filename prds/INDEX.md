@@ -22,9 +22,18 @@ Each PRD is self-contained: an agent reading only the PRD must be able to execut
 | 03 | Selection system | `.worktrees/prd-03-selection` | pending |
 | 04 | WC3 asset extraction tool | `.worktrees/prd-04-assets` | pending |
 
-## Batch 2 (after batch 1 integrated)
+## Batch 1 outcome (merged)
 
-To be planned: supply HUD, day/night cycle, replay log, 10-worker spawn + stress test.
+All 4 PRDs landed; integration glue committed; smoke-tested in Godot.
+
+## Batch 2 (parallel)
+
+| ID | Title | Worktree | Status |
+|----|-------|----------|--------|
+| 05 | 10-worker starter pack + stone node | `.worktrees/prd-05-spawn` | pending |
+| 06 | Day/night cycle | `.worktrees/prd-06-day-night` | pending |
+| 07 | Replay log save-on-quit (bridge method) | `.worktrees/prd-07-replay` | pending |
+| 08 | Stress-test mode + frame-time HUD | `.worktrees/prd-08-stress` | pending |
 
 ## Reading order for an agent
 
