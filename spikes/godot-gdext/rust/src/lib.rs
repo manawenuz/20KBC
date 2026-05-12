@@ -4,6 +4,7 @@ mod box_selector;
 mod building_node;
 mod camera_controller;
 mod damage_number;
+mod datasource;
 mod day_night;
 mod frame_time_label;
 mod gaia_node;
