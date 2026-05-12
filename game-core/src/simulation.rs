@@ -58,9 +58,12 @@ impl CSimulation {
         p0.supply_depot = Some(depot);
         sim.players.push(p0);
 
-        // Three starter workers for player 0.
-        for i in 0..3u32 {
-            let offset = Vec2::new(i as f32 * 3.0 - 3.0, 2.0);
+        // Spawn 10 starter workers in a circle around the depot, radius 4.0 wu.
+        const STARTER_WORKERS: u32 = 10;
+        const SPAWN_RADIUS: f32 = 4.0;
+        for i in 0..STARTER_WORKERS {
+            let angle = i as f32 / STARTER_WORKERS as f32 * std::f32::consts::TAU;
+            let offset = Vec2::new(angle.cos(), angle.sin()) * SPAWN_RADIUS;
             sim.spawn_unit(0, depot + offset);
         }
 
@@ -73,6 +76,7 @@ impl CSimulation {
         for (pos, amt) in nodes {
             sim.spawn_resource_node(ResourceKind::Wood, pos, amt);
         }
+        sim.spawn_resource_node(ResourceKind::Stone, Vec2::new(depot.x - 5.0, depot.y + 15.0), 400);
 
         // One GAIA wolf near the map corner.
         let wolf_center = Vec2::new(20.0, 20.0);
