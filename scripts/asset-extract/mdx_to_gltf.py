@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Minimal WC3 MDX → glTF 2.0 converter.
-Parses MDX version 800 static mesh + UVs + first texture layer (no skinning, no animation).
+Parses MDX version 800 static mesh + UVs + first texture layer + bones/skinning.
 """
 
 import argparse
@@ -146,6 +146,14 @@ class Material:
         self.layers = layers
 
 
+class Bone:
+    def __init__(self, name: str, object_id: int, parent_id: int, flags: int):
+        self.name = name
+        self.object_id = object_id
+        self.parent_id = parent_id
+        self.flags = flags
+
+
 class Geoset:
     def __init__(self):
         self.vertex_positions = []   # list of (x, y, z)
@@ -155,6 +163,9 @@ class Geoset:
         self.material_id = 0
         self.selection_group = 0
         self.selection_flags = 0
+        self.vertex_groups = []      # GNDX: uint8 matrix group per vertex
+        self.matrix_group_counts = []  # MTGC: uint32 count per matrix group
+        self.matrix_indices = []     # MATS: uint32 bone indices (flat)
 
 
 def _read_float3(data: bytes, offset: int):
@@ -181,8 +192,30 @@ def _wc3_to_gltf_normal(nrm):
     return (0.0, 1.0, 0.0)
 
 
+def _parse_nodes(chunk_data: bytes) -> list:
+    """Parse a chunk of MDX node entries (BONE, HELP, etc.)."""
+    nodes = []
+    i = 0
+    while i + 96 <= len(chunk_data):
+        size = int.from_bytes(chunk_data[i:i + 4], "little")
+        if size < 96 or i + size > len(chunk_data):
+            i += 4
+            continue
+        name = chunk_data[i + 4:i + 84].split(b"\x00")[0].decode("ascii", errors="replace")
+        obj_id = int.from_bytes(chunk_data[i + 84:i + 88], "little")
+        parent = int.from_bytes(chunk_data[i + 88:i + 92], "little")
+        flags = int.from_bytes(chunk_data[i + 92:i + 96], "little")
+        # Sanity checks
+        if obj_id < 500 and (parent == 0xFFFFFFFF or parent < 500) and flags in (0, 256, 512, 1024, 2048):
+            nodes.append((name, obj_id, parent, flags))
+            i += size
+            continue
+        i += 4
+    return nodes
+
+
 def parse_mdx(data: bytes) -> dict:
-    """Parse an MDX v800 file and return a dict with textures, materials, geosets."""
+    """Parse an MDX v800 file and return a dict with textures, materials, geosets, bones, pivots."""
     if data[:4] != b"MDLX":
         raise ValueError("Not a valid MDX file (missing MDLX magic)")
 
@@ -190,6 +223,8 @@ def parse_mdx(data: bytes) -> dict:
     textures = []
     materials = []
     geosets = []
+    bones = []
+    pivots = []
 
     offset = 4
     while offset < len(data):
@@ -290,12 +325,21 @@ def parse_mdx(data: bytes) -> dict:
                             sub_off += 8 + count * 2
                         elif sub_id == "GNDX":
                             count = int.from_bytes(geoset_data[sub_off + 4:sub_off + 8], "little")
+                            g.vertex_groups = list(geoset_data[sub_off + 8:sub_off + 8 + count])
                             sub_off += 8 + count * 1
                         elif sub_id == "MTGC":
                             count = int.from_bytes(geoset_data[sub_off + 4:sub_off + 8], "little")
+                            for i in range(count):
+                                g.matrix_group_counts.append(
+                                    int.from_bytes(geoset_data[sub_off + 8 + i * 4:sub_off + 12 + i * 4], "little")
+                                )
                             sub_off += 8 + count * 4
                         elif sub_id == "MATS":
                             count = int.from_bytes(geoset_data[sub_off + 4:sub_off + 8], "little")
+                            for i in range(count):
+                                g.matrix_indices.append(
+                                    int.from_bytes(geoset_data[sub_off + 8 + i * 4:sub_off + 12 + i * 4], "little")
+                                )
                             sub_off += 8 + count * 4
                         elif sub_id == "UVAS":
                             count = int.from_bytes(geoset_data[sub_off + 4:sub_off + 8], "little")
@@ -329,6 +373,15 @@ def parse_mdx(data: bytes) -> dict:
                 geosets.append(g)
                 geos_offset += inclusive_size
 
+        elif chunk_id == "BONE":
+            for name, obj_id, parent, flags in _parse_nodes(chunk_data):
+                bones.append(Bone(name, obj_id, parent, flags))
+
+        elif chunk_id == "PIVT":
+            count = len(chunk_data) // 12
+            for i in range(count):
+                pivots.append(_read_float3(chunk_data, i * 12))
+
         offset = next_offset
 
     return {
@@ -336,6 +389,8 @@ def parse_mdx(data: bytes) -> dict:
         "textures": textures,
         "materials": materials,
         "geosets": geosets,
+        "bones": bones,
+        "pivots": pivots,
     }
 
 
@@ -360,11 +415,31 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     geosets = mdx_data["geosets"]
     materials = mdx_data["materials"]
     textures = mdx_data["textures"]
+    bones = mdx_data.get("bones", [])
+    pivots = mdx_data.get("pivots", [])
 
-    # Collect all vertex data
+    # Build object_id -> joint_index map for bones
+    object_id_to_joint = {}
+    for joint_idx, bone in enumerate(bones):
+        object_id_to_joint[bone.object_id] = joint_idx
+
+    # Build bone parent relationships (only among bones)
+    bone_obj_ids = {b.object_id for b in bones}
+    joint_children = [[] for _ in bones]
+    root_joint_indices = []
+    for joint_idx, bone in enumerate(bones):
+        if bone.parent_id in bone_obj_ids:
+            parent_joint = object_id_to_joint[bone.parent_id]
+            joint_children[parent_joint].append(joint_idx)
+        else:
+            root_joint_indices.append(joint_idx)
+
+    # Collect all vertex data + skinning data
     all_positions = []
     all_normals = []
     all_uvs = []
+    all_joints = []   # list of (j0, j1, j2, j3)
+    all_weights = []  # list of (w0, w1, w2, w3)
     all_indices = []
     primitive_materials = []
     index_offset = 0
@@ -375,7 +450,6 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         vert_count = len(g.vertex_positions)
         pos_list = [_wc3_to_gltf_pos(p) for p in g.vertex_positions]
         nrm_list = [_wc3_to_gltf_normal(n) for n in g.vertex_normals]
-        # UVs: if missing, fill with zeros; flip V for glTF (bottom-left origin)
         uv_list = []
         if len(g.uvs) == vert_count:
             for u, v in g.uvs:
@@ -386,6 +460,36 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         all_positions.extend(pos_list)
         all_normals.extend(nrm_list)
         all_uvs.extend(uv_list)
+
+        # Skinning data per vertex
+        for v_idx in range(vert_count):
+            if v_idx < len(g.vertex_groups) and g.matrix_group_counts and g.matrix_indices:
+                group_idx = g.vertex_groups[v_idx]
+                group_start = sum(g.matrix_group_counts[:group_idx])
+                group_count = g.matrix_group_counts[group_idx]
+                bone_obj_ids_for_v = g.matrix_indices[group_start:group_start + group_count]
+                joint_indices = []
+                for obj_id in bone_obj_ids_for_v:
+                    if obj_id in object_id_to_joint:
+                        joint_indices.append(object_id_to_joint[obj_id])
+                    else:
+                        # Fallback: map to root joint if available, else 0
+                        joint_indices.append(root_joint_indices[0] if root_joint_indices else 0)
+                # Pad to 4, distribute weights evenly
+                while len(joint_indices) < 4:
+                    joint_indices.append(0)
+                weight = 1.0 / len(bone_obj_ids_for_v) if bone_obj_ids_for_v else 1.0
+                weights = [weight if i < len(bone_obj_ids_for_v) else 0.0 for i in range(4)]
+                # Renormalize to be safe
+                total_w = sum(weights)
+                if total_w > 0:
+                    weights = [w / total_w for w in weights]
+                all_joints.append(tuple(joint_indices[:4]))
+                all_weights.append(tuple(weights))
+            else:
+                # No skinning data: bind to root joint (or joint 0)
+                all_joints.append((0, 0, 0, 0))
+                all_weights.append((1.0, 0.0, 0.0, 0.0))
 
         for i0, i1, i2 in g.faces:
             all_indices.append((index_offset + i0, index_offset + i1, index_offset + i2))
@@ -417,6 +521,18 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         buf.write(struct.pack("<2f", u, v))
     uv_length = buf.tell() - uv_offset
 
+    # JOINTS_0 accessor (UNSIGNED_BYTE x 4)
+    jnt_offset = buf.tell()
+    for j0, j1, j2, j3 in all_joints:
+        buf.write(struct.pack("<4B", j0, j1, j2, j3))
+    jnt_length = buf.tell() - jnt_offset
+
+    # WEIGHTS_0 accessor (FLOAT x 4)
+    wgt_offset = buf.tell()
+    for w0, w1, w2, w3 in all_weights:
+        buf.write(struct.pack("<4f", w0, w1, w2, w3))
+    wgt_length = buf.tell() - wgt_offset
+
     # Indices accessor
     idx_offset = buf.tell()
     for i0, i1, i2 in all_indices:
@@ -426,7 +542,7 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     buffer_data = buf.getvalue()
     buffer_length = len(buffer_data)
 
-    # Build accessors / bufferViews / primitives
+    # Build accessors / bufferViews
     accessors = [
         {
             "bufferView": 0,
@@ -450,9 +566,15 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         },
         {
             "bufferView": 3,
-            "componentType": 5123,  # UNSIGNED_SHORT
-            "count": len(all_indices) * 3,
-            "type": "SCALAR",
+            "componentType": 5121,  # UNSIGNED_BYTE
+            "count": len(all_joints),
+            "type": "VEC4",
+        },
+        {
+            "bufferView": 4,
+            "componentType": 5126,  # FLOAT
+            "count": len(all_weights),
+            "type": "VEC4",
         },
     ]
 
@@ -460,7 +582,8 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         {"buffer": 0, "byteOffset": pos_offset, "byteLength": pos_length, "target": 34962},
         {"buffer": 0, "byteOffset": nrm_offset, "byteLength": nrm_length, "target": 34962},
         {"buffer": 0, "byteOffset": uv_offset, "byteLength": uv_length, "target": 34962},
-        {"buffer": 0, "byteOffset": idx_offset, "byteLength": idx_length, "target": 34963},
+        {"buffer": 0, "byteOffset": jnt_offset, "byteLength": jnt_length, "target": 34962},
+        {"buffer": 0, "byteOffset": wgt_offset, "byteLength": wgt_length, "target": 34962},
     ]
 
     # Build materials (only use first layer of each material)
@@ -512,29 +635,7 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
 
         gltf_materials.append(material_def)
 
-    # Build mesh primitives
-    primitives = []
-    for prim_idx, mat_id in enumerate(primitive_materials):
-        prim = {
-            "attributes": {
-                "POSITION": 0,
-                "NORMAL": 1,
-                "TEXCOORD_0": 2,
-            },
-            "indices": 3,
-            "mode": 4,  # TRIANGLES
-        }
-        if 0 <= mat_id < len(gltf_materials):
-            prim["material"] = mat_id
-        primitives.append(prim)
-
-    # Because we merged all geosets into one buffer, we have ONE mesh with multiple primitives
-    # But each primitive uses the same index buffer, which is wrong!
-    # We need separate primitive index ranges.
-    # Actually, since we merged everything, we should make ONE mesh with ONE primitive.
-    # But materials differ per geoset. Let's create one primitive per geoset with proper offsets.
-
-    # Recalculate with per-primitive index ranges
+    # Build per-primitive index ranges
     primitives = []
     idx_cursor = idx_offset
     for g in geosets:
@@ -550,6 +651,8 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
                 "POSITION": 0,
                 "NORMAL": 1,
                 "TEXCOORD_0": 2,
+                "JOINTS_0": 3,
+                "WEIGHTS_0": 4,
             },
             "indices": len(accessors),
             "mode": 4,
@@ -571,16 +674,93 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
         })
         primitives.append(prim)
 
+    # Build bone nodes
+    bone_nodes = []
+    for joint_idx, bone in enumerate(bones):
+        pivot_gl = _wc3_to_gltf_pos(pivots[bone.object_id]) if bone.object_id < len(pivots) else (0.0, 0.0, 0.0)
+        if bone.parent_id in bone_obj_ids and bone.parent_id < len(pivots):
+            parent_pivot_gl = _wc3_to_gltf_pos(pivots[bone.parent_id])
+            local_translation = (
+                pivot_gl[0] - parent_pivot_gl[0],
+                pivot_gl[1] - parent_pivot_gl[1],
+                pivot_gl[2] - parent_pivot_gl[2],
+            )
+        else:
+            local_translation = pivot_gl
+
+        node = {
+            "name": bone.name,
+            "translation": [local_translation[0], local_translation[1], local_translation[2]],
+        }
+        if joint_children[joint_idx]:
+            node["children"] = joint_children[joint_idx]
+        bone_nodes.append(node)
+
+    # Build inverse bind matrices
+    ibm_data = []
+    for bone in bones:
+        pivot_gl = _wc3_to_gltf_pos(pivots[bone.object_id]) if bone.object_id < len(pivots) else (0.0, 0.0, 0.0)
+        # Inverse of translation-only matrix: translate by -pivot
+        ibm_data.extend([
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            -pivot_gl[0], -pivot_gl[1], -pivot_gl[2], 1.0,
+        ])
+
+    # Append IBM to the binary buffer
+    buf2 = BytesIO()
+    buf2.write(buffer_data)
+    ibm_offset = buf2.tell()
+    for val in ibm_data:
+        buf2.write(struct.pack("<f", val))
+    ibm_length = buf2.tell() - ibm_offset
+    buffer_data = buf2.getvalue()
+    buffer_length = len(buffer_data)
+
+    # Add IBM accessor and bufferView
+    ibm_accessor_idx = len(accessors)
+    accessors.append({
+        "bufferView": len(buffer_views),
+        "componentType": 5126,  # FLOAT
+        "count": len(bones),
+        "type": "MAT4",
+    })
+    buffer_views.append({
+        "buffer": 0,
+        "byteOffset": ibm_offset,
+        "byteLength": ibm_length,
+    })
+
+    # Build glTF document
+    mesh_node = {"mesh": 0}
+    if bones:
+        mesh_node["skin"] = 0
+
+    scene_nodes = [0]  # mesh node at index 0
+    if bones:
+        # Root bone nodes come after mesh node
+        root_bone_node_indices = [1 + i for i in root_joint_indices]
+        scene_nodes.extend(root_bone_node_indices)
+
+    nodes = [mesh_node] + bone_nodes
+
     gltf = {
         "asset": {"version": "2.0", "generator": "wc3-mdx-to-gltf"},
         "scene": 0,
-        "scenes": [{"nodes": [0]}],
-        "nodes": [{"mesh": 0}],
+        "scenes": [{"nodes": scene_nodes}],
+        "nodes": nodes,
         "meshes": [{"primitives": primitives}],
         "accessors": accessors,
         "bufferViews": buffer_views,
         "buffers": [{"byteLength": buffer_length}],
     }
+
+    if bones:
+        gltf["skins"] = [{
+            "inverseBindMatrices": ibm_accessor_idx,
+            "joints": list(range(1, 1 + len(bones))),  # node indices of bone nodes
+        }]
 
     if gltf_materials:
         gltf["materials"] = gltf_materials
@@ -611,7 +791,6 @@ def write_glb(mdx_data: dict, out_path: Path, h_mpq=None) -> None:
     out_path.write_bytes(glb.getvalue())
     print(f"Wrote {out_path} ({total_length} bytes)")
 
-
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -638,10 +817,11 @@ def main() -> int:
         print(f"Read {len(mdx_bytes)} bytes from {args.mdx}")
         mdx_parsed = parse_mdx(mdx_bytes)
         print(f"Parsed MDX v{mdx_parsed['version']} with {len(mdx_parsed['geosets'])} geoset(s), "
-              f"{len(mdx_parsed['materials'])} material(s), {len(mdx_parsed['textures'])} texture(s)")
+              f"{len(mdx_parsed['materials'])} material(s), {len(mdx_parsed['textures'])} texture(s), "
+              f"{len(mdx_parsed.get('bones', []))} bone(s), {len(mdx_parsed.get('pivots', []))} pivot(s)")
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        write_glb(mdx_parsed, out_path)
+        write_glb(mdx_parsed, out_path, h_mpq=h_mpq)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         import traceback
