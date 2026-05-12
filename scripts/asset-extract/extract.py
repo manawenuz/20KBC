@@ -251,6 +251,7 @@ def main() -> int:
                 "buildings/human/townhall/townhall.mdx:townhall.glb",
                 "buildings/human/humanbarracks/humanbarracks.mdx:keep.glb",
                 "buildings/human/altarofkings/altarofkings.mdx:castle.glb",
+                "doodads/terrain/lordaerontree/lordaerontree0.mdx:lordaerontree.glb",
             ]
 
             for mapping in mappings:
