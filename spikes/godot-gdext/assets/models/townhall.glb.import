@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b8ag5xtvirghw"
-path="res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"
+uid="uid://dok7c8nb4gnry"
+path="res://.godot/imported/townhall.glb-302a3d101f280b11e01b0003052e0858.scn"
 
 [deps]
 
-source_file="res://assets/models/tree.glb"
-dest_files=["res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"]
+source_file="res://assets/models/townhall.glb"
+dest_files=["res://.godot/imported/townhall.glb-302a3d101f280b11e01b0003052e0858.scn"]
 
 [params]
 

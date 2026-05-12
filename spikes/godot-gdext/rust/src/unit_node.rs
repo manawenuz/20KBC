@@ -374,13 +374,20 @@ impl UnitNode {
 
         let mut mi = MeshInstance3D::new_alloc();
         mi.set_mesh(&r.mesh);
+        // Skin-tone fallback so surfaces without a resolved BLP don't render
+        // pure-white (which reads as "no texture" in screenshots).
+        let skin_tone = Color { r: 0.78, g: 0.62, b: 0.45, a: 1.0 };
         for (i, tex) in r.textures.iter().enumerate() {
-            if let Some(t) = tex {
-                let mut mat = StandardMaterial3D::new_gd();
-                mat.set_texture(TextureParam::ALBEDO, t);
-                mat.set_shading_mode(ShadingMode::PER_PIXEL);
-                mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
+            let mut mat = StandardMaterial3D::new_gd();
+            mat.set_shading_mode(ShadingMode::PER_PIXEL);
+            match tex {
+                Some(t) => { mat.set_texture(TextureParam::ALBEDO, t); }
+                None => {
+                    mat.set_albedo(skin_tone);
+                    godot_print!("UnitNode {mdx_path}: surface {i} has no texture (fallback)");
+                }
             }
+            mi.set_surface_override_material(i as i32, &mat.upcast::<Material>());
         }
         visual.add_child(&mi);
         if has_skeleton {
@@ -392,16 +399,23 @@ impl UnitNode {
 
         if let Some(lib) = r.animations.clone() {
             let mut anim = AnimationPlayer::new_alloc();
-            // Add as default library so animations resolve by bare name.
             anim.add_animation_library(&StringName::default(), &lib);
             visual.add_child(&anim);
-            // Play Walk first, then Stand, then Stand Ready as fallbacks.
-            for name in ["Walk", "Stand", "Stand Ready", "Birth"] {
-                if anim.has_animation(name) {
-                    anim.play_ex().name(name).done();
-                    break;
+            Self::set_loop_modes(&mut anim);
+            // Idle by default — the behavior poll in process() flips to
+            // Walk/Attack when the sim actually moves/fights the unit.
+            self.anim_map = Self::build_anim_map(&anim);
+            if let Some(ref idle) = self.anim_map[0] {
+                anim.play_ex().name(idle.as_str()).done();
+            } else {
+                for name in ["Stand", "Stand Ready", "Walk", "Birth"] {
+                    if anim.has_animation(name) {
+                        anim.play_ex().name(name).done();
+                        break;
+                    }
                 }
             }
+            self.anim_player = Some(anim);
         }
 
         self.base_mut().add_child(&visual);

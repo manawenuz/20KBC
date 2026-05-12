@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b8ag5xtvirghw"
-path="res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"
+uid="uid://dgiy8r0e2xgux"
+path="res://.godot/imported/castle.glb-9bf00907677421234aff041f354cc14c.scn"
 
 [deps]
 
-source_file="res://assets/models/tree.glb"
-dest_files=["res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"]
+source_file="res://assets/models/castle.glb"
+dest_files=["res://.godot/imported/castle.glb-9bf00907677421234aff041f354cc14c.scn"]
 
 [params]
 

@@ -114,3 +114,5 @@ text = "1 unit"
 [node name="Resources" type="Node3D" parent="."]
 
 [node name="Gaia" type="Node3D" parent="."]
+
+[node name="Buildings" type="Node3D" parent="."]

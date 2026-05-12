@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b8ag5xtvirghw"
-path="res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"
+uid="uid://c8wb463abjye5"
+path="res://.godot/imported/wolf.glb-c43bc751da80c15588a82522b2be25d1.scn"
 
 [deps]
 
-source_file="res://assets/models/tree.glb"
-dest_files=["res://.godot/imported/tree.glb-a6aad56bc09063afe86a6b7b2394e352.scn"]
+source_file="res://assets/models/wolf.glb"
+dest_files=["res://.godot/imported/wolf.glb-c43bc751da80c15588a82522b2be25d1.scn"]
 
 [params]
 

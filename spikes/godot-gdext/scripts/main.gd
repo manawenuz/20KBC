@@ -6,6 +6,7 @@ extends Node3D
 @onready var units_parent: Node3D = $Units
 @onready var resources_parent: Node3D = $Resources
 @onready var gaia_parent: Node3D = $Gaia
+@onready var buildings_parent: Node3D = $Buildings
 @onready var camera: Camera3D = $RtsCameraController
 @onready var sel_count_label: Label = $CanvasLayer/GameHud/SelectionCountLabel
 @onready var box_selector = $CanvasLayer/BoxSelector
@@ -26,6 +27,23 @@ func _ready() -> void:
     get_tree().set_auto_accept_quit(false)
     if box_selector != null:
         box_selector.connect("selection_box", Callable(self, "_on_selection_box"))
+    _spawn_buildings()
+
+func _spawn_buildings() -> void:
+    if sim == null:
+        return
+    var entries: Array = sim.get_buildings()
+    for v in entries:
+        # v packs (kind as f32, x, z, rotation_radians)
+        var v4: Vector4 = v
+        var kind: int = int(v4.x)
+        var bn = ClassDB.instantiate("BuildingNode")
+        if bn == null:
+            continue
+        bn.set("kind", kind)
+        buildings_parent.add_child(bn)
+        (bn as Node3D).position = Vector3(v4.y, 0.0, v4.z)
+        (bn as Node3D).rotation = Vector3(0.0, v4.w, 0.0)
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_WM_CLOSE_REQUEST:

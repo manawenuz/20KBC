@@ -65,8 +65,15 @@ impl AssetRegistry {
         };
         let built = build_mesh(&model);
         let mut textures = Vec::with_capacity(built.surface_textures.len());
-        for name in &built.surface_textures {
-            textures.push(name.as_deref().and_then(|n| self.load_texture(n)));
+        for (i, name) in built.surface_textures.iter().enumerate() {
+            let tex = name.as_deref().and_then(|n| self.load_texture(n));
+            if tex.is_none() {
+                godot_print!(
+                    "AssetRegistry: {mdx_path} surface {i} tex={:?} -> miss",
+                    name
+                );
+            }
+            textures.push(tex);
         }
 
         let (skeleton, skin, animations) = if model.bones.is_empty() && model.helpers.is_empty() {
